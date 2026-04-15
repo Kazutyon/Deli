@@ -413,6 +413,16 @@ async function syncFromGAS() {
           }
         }
 
+        // 3.5) それでも start/end が作れない場合は「00:00の0秒」として表示できるようにする（行落ち防止）
+        if (!start && !end && r?.date) {
+          const d = normalizeDate(r.date);
+          const s0 = new Date(`${d}T00:00:00+09:00`);
+          if (!isNaN(s0)) {
+            start = s0;
+            end = new Date(s0.getTime());
+          }
+        }
+
         // 4) duration が無くても start/end から復元（優先）
         if (start && end) {
           const d2 = Math.floor((end - start) / 1000);
@@ -495,6 +505,46 @@ async function syncFromGAS() {
         seen.add(k);
         return true;
       });
+
+      // Androidなどでローカル保存の丸め差が出ても確実に二重化を潰すため、さらにゆるいキーで重複排除
+      const looseKeyFor = (r) => {
+        const s = r?.start ? new Date(r.start).getTime() : NaN;
+        const e = r?.end ? new Date(r.end).getTime() : NaN;
+        const v = r?.vendor || '';
+        if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+        // 5秒単位で丸める（端末/保存形式の差を吸収）
+        const s5 = Math.round(s / 5000);
+        const e5 = Math.round(e / 5000);
+        return `${v}|${s5}|${e5}`;
+      };
+      const keepBest = (a, b) => {
+        // synced(GAS) を優先。両方同じなら id がある方、次に manual を優先
+        const as = !!a?.synced, bs = !!b?.synced;
+        if (as !== bs) return as ? a : b;
+        const ai = !!a?.id, bi = !!b?.id;
+        if (ai !== bi) return ai ? a : b;
+        const am = !!a?.manual, bm = !!b?.manual;
+        if (am !== bm) return am ? a : b;
+        return a;
+      };
+      const mapLoose = new Map(); // key -> { rec, idx }
+      const deduped = [];
+      for (const r of records) {
+        const k = looseKeyFor(r);
+        if (!k) { deduped.push(r); continue; }
+        const prev = mapLoose.get(k);
+        if (!prev) {
+          mapLoose.set(k, { rec: r, idx: deduped.length });
+          deduped.push(r);
+          continue;
+        }
+        const chosen = keepBest(prev.rec, r);
+        if (chosen !== prev.rec) {
+          deduped[prev.idx] = chosen;
+          mapLoose.set(k, { rec: chosen, idx: prev.idx });
+        }
+      }
+      records = deduped;
       records.sort((a,b) => a.start - b.start);
       saveLocalData();
     }
