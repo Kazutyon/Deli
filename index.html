@@ -385,7 +385,12 @@ async function syncFromGAS() {
         const endDt = parseGasDateTime(r, 'end');
         let start = startDt;
         let end = endDt;
+        // duration は数値/文字列どちらでも来るので安全に数値化
         let duration = Number(r.duration);
+        if (!Number.isFinite(duration) && typeof r.duration === 'string') {
+          const p = parseInt(r.duration, 10);
+          if (Number.isFinite(p)) duration = p;
+        }
         const vendor = V_NAMES[r.service] || 'uber';
 
         // 1) start/end が欠けてても startMs/endMs から復元（GASが返す想定）
@@ -408,10 +413,13 @@ async function syncFromGAS() {
           }
         }
 
-        // 4) durationが壊れてても start/end から復元
-        if ((!Number.isFinite(duration) || duration < 0) && start && end) {
-          duration = Math.floor((end - start) / 1000);
+        // 4) duration が無くても start/end から復元（優先）
+        if (start && end) {
+          const d2 = Math.floor((end - start) / 1000);
+          if (Number.isFinite(d2) && d2 >= 0) duration = d2;
         }
+        // 5) どうしても duration が作れない場合でも 0 として表示できるようにする
+        if (!Number.isFinite(duration) || duration < 0) duration = 0;
 
         return {
           id: r.id,
@@ -425,20 +433,30 @@ async function syncFromGAS() {
         };
       }).filter(r =>
         r.start && r.end &&
-        !isNaN(r.start) && !isNaN(r.end) &&
-        Number.isFinite(r.duration) && r.duration >= 0
+        !isNaN(r.start) && !isNaN(r.end)
       );
 
       const keyFor = (r) => {
         const s = r?.start ? new Date(r.start).getTime() : NaN;
         const e = r?.end ? new Date(r.end).getTime() : NaN;
         const v = r?.vendor || '';
-        const d = Number(r?.duration);
-        if (!Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(d)) return null;
+        if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
         // start/end をミリ秒丸め（端末やシートの丸め誤差を吸収）
         const s2 = Math.round(s / 1000);
         const e2 = Math.round(e / 1000);
-        return `${v}|${s2}|${e2}|${d}`;
+        return `${v}|${s2}|${e2}`;
+      };
+
+      const isNearSame = (a, b) => {
+        if (!a || !b) return false;
+        if ((a.vendor || '') !== (b.vendor || '')) return false;
+        const as = a.start ? new Date(a.start).getTime() : NaN;
+        const ae = a.end ? new Date(a.end).getTime() : NaN;
+        const bs = b.start ? new Date(b.start).getTime() : NaN;
+        const be = b.end ? new Date(b.end).getTime() : NaN;
+        if (!Number.isFinite(as) || !Number.isFinite(ae) || !Number.isFinite(bs) || !Number.isFinite(be)) return false;
+        // 端末差・丸め差を吸収（±2秒）
+        return Math.abs(as - bs) <= 2000 && Math.abs(ae - be) <= 2000;
       };
 
       // 端末差や一部行欠損があっても確実に反映できるよう、IDでマージする
@@ -457,7 +475,8 @@ async function syncFromGAS() {
         } else {
           // ローカル未同期でも、同一内容がGASに存在するなら置換して二重表示を防ぐ
           const k = keyFor(r);
-          if (k && incomingByKey.has(k)) merged.push(incomingByKey.get(k));
+          const cand = (k && incomingByKey.has(k)) ? incomingByKey.get(k) : null;
+          if (cand && isNearSame(r, cand)) merged.push(cand);
           else merged.push(r);
         }
       }
