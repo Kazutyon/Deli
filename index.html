@@ -158,6 +158,8 @@
         <div class="stat-sub" id="week-sub">今週 0:00 使用</div>
       </div>
     </div>
+    <div class="sec-label">今日（4:00締め）の業者別合計</div>
+    <div id="today-vendor-summary" style="margin-bottom:1rem;"></div>
     <div class="progress-wrap">
       <div class="progress-bar">
         <div class="progress-fill" id="prog-fill" style="width:0%;background:#22c55e;"></div>
@@ -244,6 +246,7 @@ const V = {
 };
 const DAYS = ['日','月','火','水','木','金','土'];
 const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ': 'rocket' };
+const DAY_CUTOFF_HOUR = 4; // 4:00〜翌3:59 を「同じ日」として集計（Uber締め）
 
 // 正しい
 let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: 'https://script.google.com/macros/s/AKfycbwMHbwTefDWDuq2YETDqVK5P8_saNKN8YwsvSpgtGCRP6yxWTH_Rg1Jhsdc-BXKp6Us/exec' };
@@ -567,11 +570,32 @@ async function postToGAS(payload) {
 }
 
 function getWeekRange(now) {
-  const d = new Date(now); d.setHours(0,0,0,0);
-  const diff = (d.getDay() - cfg.weekStart + 7) % 7;
-  const start = new Date(d); start.setDate(d.getDate() - diff);
-  const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
+  const cur = new Date(now);
+  // 営業日（4:00締め）に合わせて「その週の開始」の 4:00 を求める
+  const shifted = new Date(cur.getTime() - DAY_CUTOFF_HOUR * 3600000);
+  shifted.setHours(0, 0, 0, 0);
+  const diff = (shifted.getDay() - cfg.weekStart + 7) % 7;
+  const start = new Date(shifted);
+  start.setDate(shifted.getDate() - diff);
+  start.setHours(DAY_CUTOFF_HOUR, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  end.setMilliseconds(end.getMilliseconds() - 1);
   return { start, end };
+}
+
+function businessDayKey(d) {
+  const dt = new Date(d);
+  const shifted = new Date(dt.getTime() - DAY_CUTOFF_HOUR * 3600000);
+  return toDateInput(shifted); // yyyy-MM-dd
+}
+function businessDayLabelFromKey(key) {
+  const base = new Date(`${key}T00:00:00`);
+  return `${base.getFullYear()}年${base.getMonth()+1}月${base.getDate()}日（${DAYS[base.getDay()]}）`;
+}
+function businessDayLabelShortFromKey(key) {
+  const base = new Date(`${key}T00:00:00`);
+  return dateStr(base);
 }
 
 function fmt(sec) {
@@ -681,14 +705,20 @@ function sendMail() {
   const byV={};
   weekRecs.forEach(r=>{byV[r.vendor]=(byV[r.vendor]||0)+r.duration;});
   const weekTotal=Object.values(byV).reduce((s,v)=>s+v,0);
-  const subj=encodeURIComponent('フーデリ稼働記録 '+dateStr(ws)+'〜'+dateStr(we));
-  let body='【稼働記録】\n'+dateStr(ws)+' 〜 '+dateStr(we)+'\n\n【業者別合計】\n';
+  const wsKey = businessDayKey(ws);
+  const weKey = businessDayKey(new Date(we.getTime() - 1)); // endは翌週4:00直前なので-1ms
+  const subj=encodeURIComponent('フーデリ稼働記録 '+businessDayLabelShortFromKey(wsKey)+'〜'+businessDayLabelShortFromKey(weKey));
+  let body='【稼働記録】\n'+businessDayLabelShortFromKey(wsKey)+' 〜 '+businessDayLabelShortFromKey(weKey)+'（4:00締め）\n\n【業者別合計】\n';
   Object.keys(V).forEach(v=>{if(byV[v])body+=V[v].name+': '+fmt(byV[v])+'\n';});
   body+='─────────\n合計: '+fmt(weekTotal)+' / '+cfg.weekMax+':00\n\n【日別明細】\n';
   const byDay={};
-  weekRecs.forEach(r=>{const dk=r.start.toDateString();if(!byDay[dk])byDay[dk]={date:r.start,items:[]};byDay[dk].items.push(r);});
-  Object.values(byDay).sort((a,b)=>a.date-b.date).forEach(day=>{
-    body+='\n'+dateStr(day.date)+'\n';
+  weekRecs.forEach(r=>{
+    const dk=businessDayKey(r.start);
+    if(!byDay[dk])byDay[dk]={key:dk,items:[]};
+    byDay[dk].items.push(r);
+  });
+  Object.values(byDay).sort((a,b)=> (a.key>b.key?1:-1)).forEach(day=>{
+    body+='\n'+businessDayLabelShortFromKey(day.key)+'\n';
     day.items.forEach(r=>{body+='  '+V[r.vendor].name+' '+tStr(r.start)+'〜'+tStr(r.end)+' ('+fmt(r.duration)+')'+(r.manual?' [手動]':'')+'\n';});
   });
   window.location.href='mailto:'+(cfg.mailTo||'')+'?subject='+subj+'&body='+encodeURIComponent(body);
@@ -716,19 +746,32 @@ function recordItem(r) {
 function render() {
   const now = new Date();
   const elapsed=(active&&activeStart)?Math.floor((now-activeStart)/1000):0;
-  const today=now.toDateString();
-  document.getElementById('date-label').textContent=
-    now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日（'+DAYS[now.getDay()]+'）';
+  const todayKey = businessDayKey(now);
+  document.getElementById('date-label').textContent = businessDayLabelFromKey(todayKey) + '（4:00締め）';
 
-  const todayRecs=records.filter(r=>r.start.toDateString()===today);
-  const todaySec=todayRecs.reduce((s,r)=>s+r.duration,0)+(active&&new Date(activeStart).toDateString()===today?elapsed:0);
+  const todayRecs=records.filter(r=>businessDayKey(r.start)===todayKey);
+  const activeIsToday = active && activeStart && businessDayKey(activeStart)===todayKey;
+  const todaySec=todayRecs.reduce((s,r)=>s+r.duration,0)+(activeIsToday?elapsed:0);
   const byV={};
   todayRecs.forEach(r=>{byV[r.vendor]=(byV[r.vendor]||0)+r.duration;});
-  if(active)byV[active]=(byV[active]||0)+elapsed;
+  if(activeIsToday)byV[active]=(byV[active]||0)+elapsed;
   document.getElementById('today-val').textContent=fmt(todaySec);
   const parts=Object.keys(byV).filter(v=>byV[v]>0).map(v=>V[v].name.replace('Uber Eats','Uber')+' '+fmt(byV[v]));
   document.getElementById('today-sub').textContent=parts.join(' / ')||'-';
   Object.keys(V).forEach(v=>{document.getElementById('vt-'+v).textContent=fmt(byV[v]||0);});
+
+  // 今日タブの業者別合計欄
+  const tvs = Object.keys(V).map(v => {
+    const sec = byV[v] || 0;
+    return `<div class="week-vendor-row">
+      <span style="display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+        <span>${V[v].name}</span>
+      </span>
+      <span>${fmt(sec)}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('today-vendor-summary').innerHTML = tvs;
 
   const {start:ws,end:we}=getWeekRange(now);
   const weekRecs=records.filter(r=>r.start>=ws&&r.start<=we);
@@ -780,18 +823,28 @@ function render() {
     vs+=`<div class="week-total-row"><span>合計</span><span>${fmt(wTotal)} / ${cfg.weekMax}:00</span></div>`;
     document.getElementById('week-vendor-summary').innerHTML=vs||'<div class="empty">今週の記録がありません</div>';
     const byDay={};
-    weekRecs.forEach(r=>{const dk=r.start.toDateString();if(!byDay[dk])byDay[dk]={date:r.start,items:[]};byDay[dk].items.push(r);});
-    document.getElementById('week-detail').innerHTML=Object.values(byDay).sort((a,b)=>b.date-a.date).map(day=>
-      `<div class="day-group"><div class="day-label">${dateStr(day.date)}</div>${day.items.map(r=>recordItem(r)).join('')}</div>`
-    ).join('')||'<div class="empty">今週の記録がありません</div>';
+    weekRecs.forEach(r=>{
+      const dk=businessDayKey(r.start);
+      if(!byDay[dk])byDay[dk]={key:dk,items:[]};
+      byDay[dk].items.push(r);
+    });
+    document.getElementById('week-detail').innerHTML=Object.values(byDay)
+      .sort((a,b)=> (a.key<b.key?1:-1))
+      .map(day=> `<div class="day-group"><div class="day-label">${businessDayLabelShortFromKey(day.key)}</div>${day.items.map(r=>recordItem(r)).join('')}</div>`)
+      .join('')||'<div class="empty">今週の記録がありません</div>';
   }
 
   if(currentTab==='all'){
     const byDay={};
-    records.forEach(r=>{const dk=r.start.toDateString();if(!byDay[dk])byDay[dk]={date:r.start,items:[]};byDay[dk].items.push(r);});
-    document.getElementById('all-records').innerHTML=Object.values(byDay).sort((a,b)=>b.date-a.date).map(day=>
-      `<div class="day-group"><div class="day-label">${dateStr(day.date)}</div>${day.items.map(r=>recordItem(r)).join('')}</div>`
-    ).join('')||'<div class="empty">記録がありません</div>';
+    records.forEach(r=>{
+      const dk=businessDayKey(r.start);
+      if(!byDay[dk])byDay[dk]={key:dk,items:[]};
+      byDay[dk].items.push(r);
+    });
+    document.getElementById('all-records').innerHTML=Object.values(byDay)
+      .sort((a,b)=> (a.key<b.key?1:-1))
+      .map(day=> `<div class="day-group"><div class="day-label">${businessDayLabelShortFromKey(day.key)}</div>${day.items.map(r=>recordItem(r)).join('')}</div>`)
+      .join('')||'<div class="empty">記録がありません</div>';
   }
 }
 
