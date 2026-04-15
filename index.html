@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>フーデリ稼働記録</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #f7f7f7; color: #333; }
+    .app { max-width: 420px; margin: 0 auto; padding: 1rem; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .header h1 { font-size: 17px; font-weight: 600; color: #111; }
+    .header-btns { display: flex; gap: 6px; }
+    .hbtn { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #555; cursor: pointer; }
+    .hbtn:hover { background: #f0f0f0; }
+    .hbtn.mail { color: #2563eb; border-color: #93c5fd; }
+    .hbtn.add { color: #16a34a; border-color: #86efac; }
+    .sync-bar { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 0.75rem; padding: 6px 10px; background: white; border-radius: 8px; border: 1px solid #eee; }
+    .sync-dot { width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; display: inline-block; }
+    .sync-dot.ok { background: #22c55e; }
+    .sync-dot.err { background: #ef4444; }
+    .sync-dot.ing { background: #f59e0b; animation: blink2 1s infinite; }
+    .sync-dot.none { background: #aaa; }
+    @keyframes blink2 { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .tab-bar { display: flex; gap: 4px; margin-bottom: 1rem; background: #eee; border-radius: 8px; padding: 3px; }
+    .tab { flex: 1; text-align: center; padding: 6px; font-size: 12px; border-radius: 6px; cursor: pointer; color: #888; }
+    .tab.active { background: white; color: #111; font-weight: 600; border: 1px solid #ddd; }
+    .date-label { font-size: 12px; color: #888; margin-bottom: 1rem; text-align: center; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 0.75rem; }
+    .stat { background: #f0f0f0; border-radius: 8px; padding: 12px; }
+    .stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+    .stat-value { font-size: 21px; font-weight: 700; color: #111; }
+    .stat-sub { font-size: 10px; color: #aaa; margin-top: 2px; }
+    .progress-wrap { margin-bottom: 1.25rem; }
+    .progress-bar { height: 6px; background: #e5e5e5; border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s, background 0.3s; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 10px; color: #aaa; margin-top: 4px; }
+    .active-card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: white; }
+    .active-row { display: flex; align-items: center; justify-content: space-between; }
+    .active-left { display: flex; align-items: center; gap: 10px; }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: blink 1.5s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .active-name { font-size: 14px; font-weight: 600; color: #111; }
+    .active-since { font-size: 11px; color: #888; }
+    .active-time { font-size: 22px; font-weight: 700; color: #111; }
+    .done-btn { background: #22c55e; color: white; border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .done-btn:hover { background: #16a34a; }
+    .sec-label { font-size: 11px; color: #888; margin-bottom: 8px; }
+    .vendors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.25rem; }
+    .vbtn { border: 1px solid #ddd; border-radius: 8px; padding: 10px 4px; text-align: center; cursor: pointer; background: white; }
+    .vbtn:hover { background: #f5f5f5; }
+    .vbtn.active-uber { border: 2px solid #111; }
+    .vbtn.active-demae { border: 2px solid #e8431a; }
+    .vbtn.active-rocket { border: 2px solid #0055ff; }
+    .vicon { font-size: 18px; margin-bottom: 3px; }
+    .vname { font-size: 11px; font-weight: 600; color: #333; }
+    .vtime { font-size: 10px; color: #888; margin-top: 2px; }
+    .hitem { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f0f0f0; }
+    .hitem:last-child { border-bottom: none; }
+    .hdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .hvendor { font-size: 12px; color: #333; }
+    .hrange { font-size: 10px; color: #888; }
+    .hdur { font-size: 12px; font-weight: 600; color: #333; }
+    .edit-btn { background: none; border: none; color: #aaa; cursor: pointer; font-size: 12px; padding: 0 3px; }
+    .edit-btn:hover { color: #2563eb; }
+    .del-btn { background: none; border: none; color: #aaa; cursor: pointer; font-size: 13px; padding: 0 3px; }
+    .del-btn:hover { color: #ef4444; }
+    .empty { text-align: center; padding: 1rem; font-size: 12px; color: #aaa; }
+    .modal-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal { background: white; border-radius: 12px; padding: 1.25rem; width: 310px; border: 1px solid #ddd; }
+    .modal-title { font-size: 15px; font-weight: 600; color: #111; margin-bottom: 1rem; }
+    .form-row { margin-bottom: 12px; }
+    .form-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+    .form-row select, .form-row input { width: 100%; font-size: 13px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; }
+    .form-btns { display: flex; gap: 8px; margin-top: 1rem; }
+    .btn-cancel { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: none; color: #888; font-size: 13px; cursor: pointer; }
+    .btn-save { flex: 1; padding: 8px; border: none; border-radius: 8px; background: #3b82f6; color: white; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .settings-panel { border: 1px solid #ddd; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: #f9f9f9; }
+    .settings-title { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 12px; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
+    .setting-row:last-child { margin-bottom: 0; }
+    .setting-name { font-size: 12px; color: #666; }
+    .setting-row select { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; }
+    .setting-row input[type=number] { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; width: 60px; text-align: right; }
+    .setting-row input[type=email], .setting-row input[type=url] { font-size: 11px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; width: 100%; }
+    .week-title { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 8px; }
+    .week-vendor-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+    .week-total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; font-weight: 600; color: #111; border-top: 1px solid #ddd; margin-top: 4px; }
+    .day-group { margin-bottom: 12px; }
+    .day-label { font-size: 12px; font-weight: 600; color: #888; margin-bottom: 6px; }
+    .manual-tag { font-size: 9px; background: #fef3c7; color: #d97706; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+    .gas-tag { font-size: 9px; background: #dcfce7; color: #16a34a; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>フーデリ稼働記録</h1>
+    <div class="header-btns">
+      <button class="hbtn add" onclick="openModal(null)">+ 追加</button>
+      <button class="hbtn mail" onclick="sendMail()">メール</button>
+      <button class="hbtn" onclick="toggleSettings()">設定</button>
+    </div>
+  </div>
+
+  <div id="sync-bar" class="sync-bar">
+    <span><span class="sync-dot none" id="sync-dot"></span><span id="sync-msg">GAS URL未設定（ローカル保存中）</span></span>
+    <button onclick="syncFromGAS()" style="background:none;border:none;font-size:11px;color:#2563eb;cursor:pointer;">更新</button>
+  </div>
+
+  <div id="settings-panel" style="display:none;">
+    <div class="settings-panel">
+      <div class="settings-title">設定</div>
+      <div class="setting-row">
+        <span class="setting-name">週の開始曜日</span>
+        <select id="week-start" onchange="saveSettings()">
+          <option value="0">日曜始まり</option>
+          <option value="1" selected>月曜始まり</option>
+          <option value="2">火曜始まり</option>
+          <option value="3">水曜始まり</option>
+          <option value="4">木曜始まり</option>
+          <option value="5">金曜始まり</option>
+          <option value="6">土曜始まり</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">週の上限時間</span>
+        <input type="number" id="week-max" value="20" min="1" max="40" onchange="saveSettings()"> h
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">送信先メール</span>
+        <input type="email" id="mail-to" placeholder="you@example.com" onchange="saveSettings()">
+      </div>
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;">
+        <span class="setting-name">GAS URL（省略可）</span>
+        <input type="url" id="gas-url" placeholder="https://script.google.com/..." onchange="saveSettings()">
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab active" id="tab-today" onclick="switchTab('today')">今日</div>
+    <div class="tab" id="tab-week" onclick="switchTab('week')">今週</div>
+    <div class="tab" id="tab-all" onclick="switchTab('all')">全記録</div>
+  </div>
+
+  <div id="view-today">
+    <div class="date-label" id="date-label"></div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">今日の稼働</div>
+        <div class="stat-value" id="today-val">0:00</div>
+        <div class="stat-sub" id="today-sub">-</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">今週の残り</div>
+        <div class="stat-value" id="week-remain">20:00</div>
+        <div class="stat-sub" id="week-sub">今週 0:00 使用</div>
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-bar">
+        <div class="progress-fill" id="prog-fill" style="width:0%;background:#22c55e;"></div>
+      </div>
+      <div class="progress-label">
+        <span id="week-range-label"></span>
+        <span id="prog-pct">0%</span>
+      </div>
+    </div>
+    <div id="active-area"></div>
+    <div class="sec-label">業者を選んで開始</div>
+    <div class="vendors">
+      <div class="vbtn" id="vbtn-uber" onclick="startDel('uber')">
+        <div class="vicon">🚴</div>
+        <div class="vname">Uber Eats</div>
+        <div class="vtime" id="vt-uber">0:00</div>
+      </div>
+      <div class="vbtn" id="vbtn-demae" onclick="startDel('demae')">
+        <div class="vicon">🛵</div>
+        <div class="vname">出前館</div>
+        <div class="vtime" id="vt-demae">0:00</div>
+      </div>
+      <div class="vbtn" id="vbtn-rocket" onclick="startDel('rocket')">
+        <div class="vicon">🚀</div>
+        <div class="vname">ロケットナウ</div>
+        <div class="vtime" id="vt-rocket">0:00</div>
+      </div>
+    </div>
+    <div class="sec-label">本日の記録</div>
+    <div id="hist-today"></div>
+  </div>
+
+  <div id="view-week" style="display:none;">
+    <div class="date-label" id="week-range-label2"></div>
+    <div class="week-title">業者別合計</div>
+    <div id="week-vendor-summary" style="margin-bottom:1rem;"></div>
+    <div class="sec-label">日別明細</div>
+    <div id="week-detail"></div>
+  </div>
+
+  <div id="view-all" style="display:none;">
+    <div class="sec-label">全記録（新しい順）</div>
+    <div id="all-records"></div>
+  </div>
+</div>
+
+<div id="modal" style="display:none;">
+  <div class="modal-bg" onclick="closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title" id="modal-title">記録を追加</div>
+      <div class="form-row">
+        <div class="form-label">業者</div>
+        <select id="f-vendor">
+          <option value="uber">Uber Eats</option>
+          <option value="demae">出前館</option>
+          <option value="rocket">ロケットナウ</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-label">日付</div>
+        <input type="date" id="f-date">
+      </div>
+      <div class="form-row">
+        <div class="form-label">開始時刻</div>
+        <input type="time" id="f-start">
+      </div>
+      <div class="form-row">
+        <div class="form-label">終了時刻</div>
+        <input type="time" id="f-end">
+      </div>
+      <div class="form-btns">
+        <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+        <button class="btn-save" onclick="saveRecord()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const V = {
+  uber:   { name: 'Uber Eats',    color: '#111' },
+  demae:  { name: '出前館',       color: '#e8431a' },
+  rocket: { name: 'ロケットナウ', color: '#0055ff' }
+};
+const DAYS = ['日','月','火','水','木','金','土'];
+const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ': 'rocket' };
+
+// 正しい
+let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: 'https://script.google.com/macros/s/AKfycbwMHbwTefDWDuq2YETDqVK5P8_saNKN8YwsvSpgtGCRP6yxWTH_Rg1Jhsdc-BXKp6Us/exec' };
+let active = null, activeStart = null;
+let records = [];
+let currentTab = 'today';
+let editIdx = null;
+let syncStatus = 'none';
+
+function loadData() {
+  try {
+    const c = localStorage.getItem('fdc_cfg');
+    if (c) cfg = Object.assign(cfg, JSON.parse(c));
+    const r = localStorage.getItem('fdc_records');
+    if (r) records = JSON.parse(r).map(x => ({ ...x, start: new Date(x.start), end: new Date(x.end) }));
+    const a = localStorage.getItem('fdc_active');
+    if (a) { const ad = JSON.parse(a); active = ad.vendor; activeStart = new Date(ad.start); }
+    document.getElementById('week-start').value = cfg.weekStart;
+    document.getElementById('week-max').value = cfg.weekMax;
+    document.getElementById('mail-to').value = cfg.mailTo || '';
+    document.getElementById('gas-url').value = cfg.gasUrl || '';
+  } catch(e) {}
+}
+
+function saveLocalData() {
+  try {
+    localStorage.setItem('fdc_cfg', JSON.stringify(cfg));
+    localStorage.setItem('fdc_records', JSON.stringify(records));
+    if (active) localStorage.setItem('fdc_active', JSON.stringify({ vendor: active, start: activeStart }));
+    else localStorage.removeItem('fdc_active');
+  } catch(e) {}
+}
+
+function saveSettings() {
+  cfg.weekStart = parseInt(document.getElementById('week-start').value);
+  cfg.weekMax = parseInt(document.getElementById('week-max').value) || 20;
+  cfg.mailTo = document.getElementById('mail-to').value;
+  cfg.gasUrl = document.getElementById('gas-url').value;
+  saveLocalData(); updateSyncBar(); render();
+}
+
+function toggleSettings() {
+  const p = document.getElementById('settings-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['today','week','all'].forEach(t => {
+    document.getElementById('tab-'+t).className = 'tab'+(t===tab?' active':'');
+    document.getElementById('view-'+t).style.display = t===tab?'block':'none';
+  });
+  render();
+}
+
+function updateSyncBar() {
+  const dot = document.getElementById('sync-dot');
+  const msg = document.getElementById('sync-msg');
+  if (!cfg.gasUrl) {
+    dot.className = 'sync-dot none';
+    msg.textContent = 'GAS URL未設定（ローカル保存中）';
+  } else if (syncStatus === 'ok') {
+    dot.className = 'sync-dot ok';
+    msg.textContent = 'Google Sheetsと同期中';
+  } else if (syncStatus === 'ing') {
+    dot.className = 'sync-dot ing';
+    msg.textContent = '同期中...';
+  } else if (syncStatus === 'err') {
+    dot.className = 'sync-dot err';
+    msg.textContent = '同期エラー（ローカル保存中）';
+  } else {
+    dot.className = 'sync-dot none';
+    msg.textContent = 'GAS設定済み（未同期）';
+  }
+}
+
+
+async function syncFromGAS() {
+  if (!cfg.gasUrl) return;
+  syncStatus = 'ing'; updateSyncBar();
+  try {
+    const jsonp = (url) => new Promise((resolve, reject) => {
+      const cb = '__fdc_cb_' + Math.random().toString(36).slice(2);
+      const script = document.createElement('script');
+      const cleanup = () => {
+        try { delete window[cb]; } catch (_) { window[cb] = undefined; }
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+      const timer = setTimeout(() => { cleanup(); reject(new Error('JSONP timeout')); }, 15000);
+      window[cb] = (data) => { clearTimeout(timer); cleanup(); resolve(data); };
+      script.onerror = () => { clearTimeout(timer); cleanup(); reject(new Error('JSONP error')); };
+      script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + encodeURIComponent(cb);
+      document.head.appendChild(script);
+    });
+
+    const data = await jsonp(cfg.gasUrl + '?weekStart=' + encodeURIComponent(cfg.weekStart));
+    if (data.allLogs) {
+      const pad2 = (n) => String(n).padStart(2, '0');
+      const normalizeDate = (s) => String(s || '').trim().replace(/\//g, '-');
+      const normalizeTime = (s) => {
+        const t = String(s || '').trim();
+        if (!t) return '';
+        const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+        if (!m) return t;
+        return `${pad2(m[1])}:${m[2]}:${pad2(m[3] ?? '0')}`;
+      };
+      const toIsoWithJstOffset = (dateStr, timeStr) => {
+        const d = normalizeDate(dateStr);
+        const t = normalizeTime(timeStr);
+        if (!d || !t) return null;
+        // Always include timezone to avoid iOS/Android/Windows parsing differences.
+        return `${d}T${t}+09:00`;
+      };
+      const parseIsoOrNull = (iso) => {
+        if (typeof iso !== 'string' || !iso.includes('T')) return null;
+        const dt = new Date(iso);
+        return isNaN(dt) ? null : dt;
+      };
+      const parseMsOrNull = (ms) => {
+        if (ms === null || typeof ms === 'undefined' || ms === '') return null;
+        const n = Number(ms);
+        if (!Number.isFinite(n)) return null;
+        const dt = new Date(n);
+        return isNaN(dt) ? null : dt;
+      };
+      const parseGasDateTime = (r, which) => {
+        const dtIso = parseIsoOrNull(r?.[`${which}Iso`]) || parseIsoOrNull(r?.[which]);
+        if (dtIso) return dtIso;
+        const dtMs = parseMsOrNull(r?.[`${which}Ms`]);
+        if (dtMs) return dtMs;
+        const built = toIsoWithJstOffset(r?.date, r?.[which]);
+        if (!built) return null;
+        const dt = new Date(built);
+        return isNaN(dt) ? null : dt;
+      };
+
+      const newRecords = data.allLogs.map(r => {
+        const startDt = parseGasDateTime(r, 'start');
+        const endDt = parseGasDateTime(r, 'end');
+        let start = startDt;
+        let end = endDt;
+        let duration = Number(r.duration);
+        const vendor = V_NAMES[r.service] || 'uber';
+
+        // 1) start/end が欠けてても startMs/endMs から復元（GASが返す想定）
+        if (!start) start = parseMsOrNull(r?.startMs);
+        if (!end) end = parseMsOrNull(r?.endMs);
+
+        // 2) 片方だけなら duration で補完
+        if (Number.isFinite(duration) && duration > 0) {
+          if (start && !end) end = new Date(start.getTime() + duration * 1000);
+          if (end && !start) start = new Date(end.getTime() - duration * 1000);
+        }
+
+        // 3) 時刻が全滅でも date + duration があれば「00:00開始」として補完して表示できるようにする
+        if (!start && !end && Number.isFinite(duration) && duration > 0 && r?.date) {
+          const d = normalizeDate(r.date);
+          const s0 = new Date(`${d}T00:00:00+09:00`);
+          if (!isNaN(s0)) {
+            start = s0;
+            end = new Date(s0.getTime() + duration * 1000);
+          }
+        }
+
+        return { id: r.id, vendor, start, end, duration, manual: r.manual, synced: true, estimated: (!startDt || !endDt) };
+      }).filter(r => r.start && r.end && !isNaN(r.start) && !isNaN(r.end) && Number.isFinite(r.duration) && r.duration >= 0);
+
+      // 【修正ポイント】
+      // GASからのデータが空で、ローカルに未同期のデータがある場合は上書きをスキップする
+      // または、単純に records = newRecords とするのではなく、IDがあるものだけ差し替える
+      if (newRecords.length >= records.filter(r => r.synced).length) {
+        records = newRecords;
+        records.sort((a,b) => a.start - b.start);
+        saveLocalData();
+      }
+    }
+    syncStatus = 'ok'; updateSyncBar(); render();
+  } catch(e) {
+    syncStatus = 'err'; updateSyncBar();
+  }
+}
+
+async function postToGAS(payload) {
+  if (!cfg.gasUrl) return false;
+  try {
+    await fetch(cfg.gasUrl, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch(e) { return false; }
+}
+
+function getWeekRange(now) {
+  const d = new Date(now); d.setHours(0,0,0,0);
+  const diff = (d.getDay() - cfg.weekStart + 7) % 7;
+  const start = new Date(d); start.setDate(d.getDate() - diff);
+  const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
+  return { start, end };
+}
+
+function fmt(sec) {
+  const h=Math.floor(Math.abs(sec)/3600), m=Math.floor((Math.abs(sec)%3600)/60);
+  return h+':'+String(m).padStart(2,'0');
+}
+function fmtFull(sec) {
+  const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+  return h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+function tStr(d) { return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function dateStr(d) { return (d.getMonth()+1)+'/'+d.getDate()+'('+DAYS[d.getDay()]+')'; }
+function toDateInput(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function toTimeInput(d) { return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+
+function openModal(idx) {
+  editIdx = idx;
+  const now = new Date();
+  document.getElementById('modal-title').textContent = idx===null?'記録を追加':'記録を編集';
+  if (idx !== null) {
+    const r = records[idx];
+    document.getElementById('f-vendor').value = r.vendor;
+    document.getElementById('f-date').value = toDateInput(r.start);
+    document.getElementById('f-start').value = toTimeInput(r.start);
+    document.getElementById('f-end').value = toTimeInput(r.end);
+  } else {
+    document.getElementById('f-vendor').value = 'uber';
+    document.getElementById('f-date').value = toDateInput(now);
+    document.getElementById('f-start').value = toTimeInput(now);
+    document.getElementById('f-end').value = toTimeInput(now);
+  }
+  document.getElementById('modal').style.display = 'block';
+}
+
+function closeModal() {
+  document.getElementById('modal').style.display = 'none';
+  editIdx = null;
+}
+
+async function saveRecord() {
+  const vendor = document.getElementById('f-vendor').value;
+  const date = document.getElementById('f-date').value;
+  const startT = document.getElementById('f-start').value;
+  const endT = document.getElementById('f-end').value;
+  if (!date||!startT||!endT) { alert('すべての項目を入力してください'); return; }
+  const start = new Date(date+'T'+startT);
+  const end = new Date(date+'T'+endT);
+  if (end<=start) { alert('終了時刻は開始時刻より後にしてください'); return; }
+  const duration = Math.floor((end-start)/1000);
+  if (editIdx !== null) {
+    const oldRec = records[editIdx];
+    records[editIdx] = { ...oldRec, vendor, start, end, duration, manual: true };
+    if (cfg.gasUrl && oldRec.id) {
+      await postToGAS({ action:'update', id:oldRec.id, service:V[vendor].name, start:start.toISOString(), end:end.toISOString() });
+      setTimeout(syncFromGAS, 1500);
+    }
+  } else {
+    records.push({ vendor, start, end, duration, manual: true });
+    records.sort((a,b) => a.start-b.start);
+    if (cfg.gasUrl) {
+      await postToGAS({ service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true });
+      setTimeout(syncFromGAS, 1500);
+    }
+  }
+  saveLocalData(); closeModal(); render();
+}
+
+function startDel(v) {
+  if (active) completeDel();
+  active = v; activeStart = new Date();
+  ['uber','demae','rocket'].forEach(x => document.getElementById('vbtn-'+x).className='vbtn');
+  document.getElementById('vbtn-'+v).className='vbtn active-'+v;
+  saveLocalData(); render();
+}
+
+async function completeDel() {
+  if (!active) return;
+  const end = new Date();
+  const rec = { vendor:active, start:new Date(activeStart), end, duration:Math.floor((end-activeStart)/1000) };
+  records.push(rec);
+  records.sort((a,b) => a.start-b.start);
+  if (cfg.gasUrl) {
+    await postToGAS({ service:V[active].name, start:rec.start.toISOString(), end:end.toISOString() });
+    setTimeout(syncFromGAS, 1500);
+  }
+  ['uber','demae','rocket'].forEach(x => document.getElementById('vbtn-'+x).className='vbtn');
+  active = null; activeStart = null;
+  saveLocalData(); render();
+}
+
+async function deleteRecord(idx) {
+  if (!confirm('この記録を削除しますか？')) return;
+  const rec = records[idx];
+  if (cfg.gasUrl && rec.id) {
+    await postToGAS({ action:'delete', id:rec.id });
+    setTimeout(syncFromGAS, 1500);
+  }
+  records.splice(idx, 1);
+  saveLocalData(); render();
+}
+
+function sendMail() {
+  const now = new Date();
+  const { start:ws, end:we } = getWeekRange(now);
+  const weekRecs = records.filter(r => r.start>=ws&&r.start<=we);
+  if (weekRecs.length===0) { alert('今週の記録がありません'); return; }
+  const byV={};
+  weekRecs.forEach(r=>{byV[r.vendor]=(byV[r.vendor]||0)+r.duration;});
+  const weekTotal=Object.values(byV).reduce((s,v)=>s+v,0);
+  const subj=encodeURIComponent('フーデリ稼働記録 '+dateStr(ws)+'〜'+dateStr(we));
+  let body='【稼働記録】\n'+dateStr(ws)+' 〜 '+dateStr(we)+'\n\n【業者別合計】\n';
+  Object.keys(V).forEach(v=>{if(byV[v])body+=V[v].name+': '+fmt(byV[v])+'\n';});
+  body+='─────────\n合計: '+fmt(weekTotal)+' / '+cfg.weekMax+':00\n\n【日別明細】\n';
+  const byDay={};
+  weekRecs.forEach(r=>{const dk=r.start.toDateString();if(!byDay[dk])byDay[dk]={date:r.start,items:[]};byDay[dk].items.push(r);});
+  Object.values(byDay).sort((a,b)=>a.date-b.date).forEach(day=>{
+    body+='\n'+dateStr(day.date)+'\n';
+    day.items.forEach(r=>{body+='  '+V[r.vendor].name+' '+tStr(r.start)+'〜'+tStr(r.end)+' ('+fmt(r.duration)+')'+(r.manual?' [手動]':'')+'\n';});
+  });
+  window.location.href='mailto:'+(cfg.mailTo||'')+'?subject='+subj+'&body='+encodeURIComponent(body);
+}
+
+function recordItem(r) {
+  const idx = records.indexOf(r);
+  const tags=(r.manual?'<span class="manual-tag">手動</span>':'')+(r.synced?'<span class="gas-tag">GAS</span>':'');
+  return `<div class="hitem">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="hdot" style="background:${V[r.vendor].color}"></div>
+      <div>
+        <div class="hvendor">${V[r.vendor].name}${tags}</div>
+        <div class="hrange">${tStr(r.start)} → ${tStr(r.end)}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <div class="hdur">${fmtFull(r.duration)}</div>
+      <button class="edit-btn" onclick="openModal(${idx})">編集</button>
+      <button class="del-btn" onclick="deleteRecord(${idx})">✕</button>
+    </div>
+  </div>`;
+}
+
+function render() {
+  const now = new Date();
+  const elapsed=(active&&activeStart)?Math.floor((now-activeStart)/1000):0;
+  const today=now.toDateString();
+  document.getElementById('date-label').textContent=
+    now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日（'+DAYS[now.getDay()]+'）';
+
+  const todayRecs=records.filter(r=>r.start.toDateString()===today);
+  const todaySec=todayRecs.reduce((s,r)=>s+r.duration,0)+(active&&new Date(activeStart).toDateString()===today?elapsed:0);
+  const byV={};
+  todayRecs.forEach(r=>{byV[r.vendor]=(byV[r.vendor]||0)+r.duration;});
+  if(active)byV[active]=(byV[active]||0)+elapsed;
+  document.getElementById('today-val').textContent=fmt(todaySec);
+  const parts=Object.keys(byV).filter(v=>byV[v]>0).map(v=>V[v].name.replace('Uber Eats','Uber')+' '+fmt(byV[v]));
+  document.getElementById('today-sub').textContent=parts.join(' / ')||'-';
+  Object.keys(V).forEach(v=>{document.getElementById('vt-'+v).textContent=fmt(byV[v]||0);});
+
+  const {start:ws,end:we}=getWeekRange(now);
+  const weekRecs=records.filter(r=>r.start>=ws&&r.start<=we);
+  const weekSec=weekRecs.reduce((s,r)=>s+r.duration,0)+(active&&activeStart>=ws?elapsed:0);
+  const maxSec=cfg.weekMax*3600;
+  document.getElementById('week-remain').textContent=fmt(Math.max(0,maxSec-weekSec));
+  document.getElementById('week-sub').textContent='今週 '+fmt(weekSec)+' / '+cfg.weekMax+'h使用';
+  const pct=Math.min(100,Math.round(weekSec/maxSec*100));
+  const fill=document.getElementById('prog-fill');
+  fill.style.width=pct+'%';
+  fill.style.background=pct>90?'#ef4444':pct>70?'#f59e0b':'#22c55e';
+  document.getElementById('prog-pct').textContent=pct+'%';
+  const wrl=dateStr(ws)+' 〜 '+dateStr(we);
+  document.getElementById('week-range-label').textContent=wrl;
+  document.getElementById('week-range-label2').textContent=wrl;
+
+  const aa=document.getElementById('active-area');
+  if(active&&activeStart){
+    aa.innerHTML=`<div class="active-card"><div class="active-row">
+      <div class="active-left">
+        <div class="pulse"></div>
+        <div>
+          <div class="active-name">${V[active].name}</div>
+          <div class="active-since">${tStr(activeStart)} 開始</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="active-time">${fmtFull(elapsed)}</div>
+        <button class="done-btn" onclick="completeDel()">完了</button>
+      </div>
+    </div></div>`;
+  } else {aa.innerHTML='';}
+
+  const ht=document.getElementById('hist-today');
+  ht.innerHTML=todayRecs.length===0?'<div class="empty">まだ記録がありません</div>':
+    [...todayRecs].reverse().map(r=>recordItem(r)).join('');
+
+  if(currentTab==='week'){
+    const wByV={};
+    weekRecs.forEach(r=>{wByV[r.vendor]=(wByV[r.vendor]||0)+r.duration;});
+    const wTotal=Object.values(wByV).reduce((s,v)=>s+v,0);
+    let vs=Object.keys(V).filter(v=>wByV[v]).map(v=>`<div class="week-vendor-row">
+      <span style="display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+        <span>${V[v].name}</span>
+      </span>
+      <span>${fmt(wByV[v])}</span>
+    </div>`).join('');
+    vs+=`<div class="week-total-row"><span>合計</span><span>${fmt(wTotal)} / ${cfg.weekMax}:00</span></div>`;
+    document.getElementById('week-vendor-summary').innerHTML=vs||'<div class="empty">今週の記録がありません</div>';
+    const byDay={};
+    weekRecs.forEach(r=>{const dk=r.start.toDateString();if(!byDay[dk])byDay[dk]={date:r.start,items:[]};byDay[dk].items.push(r);});
+    document.getElementById('week-detail').innerHTML=Object.values(byDay).sort((a,b)=>b.date-a.date).map(day=>
+      `<div class="day-group"><div class="day-label">${dateStr(day.date)}</div>${day.items.map(r=>recordItem(r)).join('')}</div>`
+    ).join('')||'<div class="empty">今週の記録がありません</div>';
+  }
+
+  if(currentTab==='all'){
+    const byDay={};
+    records.forEach(r=>{const dk=r.start.toDateString();if(!byDay[dk])byDay[dk]={date:r.start,items:[]};byDay[dk].items.push(r);});
+    document.getElementById('all-records').innerHTML=Object.values(byDay).sort((a,b)=>b.date-a.date).map(day=>
+      `<div class="day-group"><div class="day-label">${dateStr(day.date)}</div>${day.items.map(r=>recordItem(r)).join('')}</div>`
+    ).join('')||'<div class="empty">記録がありません</div>';
+  }
+}
+
+loadData();
+updateSyncBar();
+if(cfg.gasUrl) syncFromGAS();
+setInterval(()=>{saveLocalData();render();},1000);
+render();
+</script>
+</body>
+</html>
