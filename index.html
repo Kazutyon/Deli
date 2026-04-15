@@ -411,14 +411,31 @@ async function syncFromGAS() {
         return { id: r.id, vendor, start, end, duration, manual: r.manual, synced: true, estimated: (!startDt || !endDt) };
       }).filter(r => r.start && r.end && !isNaN(r.start) && !isNaN(r.end) && Number.isFinite(r.duration) && r.duration >= 0);
 
-      // 【修正ポイント】
-      // GASからのデータが空で、ローカルに未同期のデータがある場合は上書きをスキップする
-      // または、単純に records = newRecords とするのではなく、IDがあるものだけ差し替える
-      if (newRecords.length >= records.filter(r => r.synced).length) {
-        records = newRecords;
-        records.sort((a,b) => a.start - b.start);
-        saveLocalData();
+      // 端末差や一部行欠損があっても確実に反映できるよう、IDでマージする
+      const incomingById = new Map(newRecords.filter(r => r.id).map(r => [String(r.id), r]));
+      const existingById = new Map(records.filter(r => r && r.id).map(r => [String(r.id), r]));
+
+      // 既存の未同期(ローカル)は残しつつ、同期済みはincomingで差し替え
+      const merged = [];
+      for (const r of records) {
+        if (!r) continue;
+        const id = r.id ? String(r.id) : null;
+        if (r.synced) {
+          if (id && incomingById.has(id)) merged.push(incomingById.get(id));
+          // incomingに無い同期済みは消える（Sheetsが正）
+        } else {
+          merged.push(r);
+        }
       }
+      // incomingにあって、既存に無いものを追加
+      for (const r of newRecords) {
+        const id = r.id ? String(r.id) : null;
+        if (!id || !existingById.has(id)) merged.push(r);
+      }
+
+      records = merged;
+      records.sort((a,b) => a.start - b.start);
+      saveLocalData();
     }
     syncStatus = 'ok'; updateSyncBar(); render();
   } catch(e) {
