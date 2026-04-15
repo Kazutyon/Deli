@@ -408,12 +408,43 @@ async function syncFromGAS() {
           }
         }
 
-        return { id: r.id, vendor, start, end, duration, manual: r.manual, synced: true, estimated: (!startDt || !endDt) };
-      }).filter(r => r.start && r.end && !isNaN(r.start) && !isNaN(r.end) && Number.isFinite(r.duration) && r.duration >= 0);
+        // 4) durationが壊れてても start/end から復元
+        if ((!Number.isFinite(duration) || duration < 0) && start && end) {
+          duration = Math.floor((end - start) / 1000);
+        }
+
+        return {
+          id: r.id,
+          vendor,
+          start,
+          end,
+          duration,
+          manual: r.manual,
+          synced: true,
+          estimated: (!startDt || !endDt)
+        };
+      }).filter(r =>
+        r.start && r.end &&
+        !isNaN(r.start) && !isNaN(r.end) &&
+        Number.isFinite(r.duration) && r.duration >= 0
+      );
+
+      const keyFor = (r) => {
+        const s = r?.start ? new Date(r.start).getTime() : NaN;
+        const e = r?.end ? new Date(r.end).getTime() : NaN;
+        const v = r?.vendor || '';
+        const d = Number(r?.duration);
+        if (!Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(d)) return null;
+        // start/end をミリ秒丸め（端末やシートの丸め誤差を吸収）
+        const s2 = Math.round(s / 1000);
+        const e2 = Math.round(e / 1000);
+        return `${v}|${s2}|${e2}|${d}`;
+      };
 
       // 端末差や一部行欠損があっても確実に反映できるよう、IDでマージする
       const incomingById = new Map(newRecords.filter(r => r.id).map(r => [String(r.id), r]));
       const existingById = new Map(records.filter(r => r && r.id).map(r => [String(r.id), r]));
+      const incomingByKey = new Map(newRecords.map(r => [keyFor(r), r]).filter(([k]) => k));
 
       // 既存の未同期(ローカル)は残しつつ、同期済みはincomingで差し替え
       const merged = [];
@@ -424,7 +455,10 @@ async function syncFromGAS() {
           if (id && incomingById.has(id)) merged.push(incomingById.get(id));
           // incomingに無い同期済みは消える（Sheetsが正）
         } else {
-          merged.push(r);
+          // ローカル未同期でも、同一内容がGASに存在するなら置換して二重表示を防ぐ
+          const k = keyFor(r);
+          if (k && incomingByKey.has(k)) merged.push(incomingByKey.get(k));
+          else merged.push(r);
         }
       }
       // incomingにあって、既存に無いものを追加
@@ -433,7 +467,15 @@ async function syncFromGAS() {
         if (!id || !existingById.has(id)) merged.push(r);
       }
 
-      records = merged;
+      // 最後に重複排除（GAS+ローカルの二重化対策）
+      const seen = new Set();
+      records = merged.filter(r => {
+        const k = (r.id ? `id:${r.id}` : `k:${keyFor(r)}`) || null;
+        if (!k) return true;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
       records.sort((a,b) => a.start - b.start);
       saveLocalData();
     }
