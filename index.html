@@ -1027,8 +1027,7 @@ function render() {
         ).join('');
         return `<div class="day-group">
           <div class="day-label">${businessDayLabelShortFromKey(dk)}</div>
-          ${day.items.map(r=>recordItem(r)).join('')}
-          <div style="margin-top:8px;padding:8px 10px;background:#f9f9f9;border-radius:8px;border:1px solid #eee;">
+          <div style="padding:8px 10px;background:#f9f9f9;border-radius:8px;border:1px solid #eee;">
             ${vtRows}
             <div style="display:flex;justify-content:space-between;padding:5px 0 0;font-size:12px;font-weight:600;color:#111;">
               <span>${businessDayLabelShortFromKey(dk)} 合計</span>
