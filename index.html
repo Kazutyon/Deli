@@ -45,10 +45,13 @@
     .active-time { font-size: 22px; font-weight: 700; color: #111; }
     .done-btn { background: #22c55e; color: white; border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
     .done-btn:hover { background: #16a34a; }
+    .done-btn:active { transform: translateY(1px); }
+    .done-btn:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
     .sec-label { font-size: 11px; color: #888; margin-bottom: 8px; }
     .vendors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.25rem; }
     .vbtn { border: 1px solid #ddd; border-radius: 8px; padding: 10px 4px; text-align: center; cursor: pointer; background: white; }
     .vbtn:hover { background: #f5f5f5; }
+    .vbtn.disabled { opacity: 0.55; pointer-events: none; }
     .vbtn.active-uber { border: 2px solid #111; }
     .vbtn.active-demae { border: 2px solid #e8431a; }
     .vbtn.active-rocket { border: 2px solid #0055ff; }
@@ -98,7 +101,7 @@
     <h1>フーデリ稼働記録</h1>
     <div class="header-btns">
       <button class="hbtn add" onclick="openModal(null)">+ 追加</button>
-      <button class="hbtn mail" onclick="sendMail()">メール</button>
+      <button class="hbtn mail" onclick="openMailModal()">メール</button>
       <button class="hbtn" onclick="toggleSettings()">設定</button>
     </div>
   </div>
@@ -158,8 +161,8 @@
         <div class="stat-sub" id="week-sub">今週 0:00 使用</div>
       </div>
     </div>
-    <div class="sec-label">今日（4:00締め）の業者別合計</div>
-    <div id="today-vendor-summary" style="margin-bottom:1rem;"></div>
+  <div class="sec-label">今日の売上（4:00締め）</div>
+  <div id="today-earnings" style="margin-bottom:1rem;"></div>
     <div class="progress-wrap">
       <div class="progress-bar">
         <div class="progress-fill" id="prog-fill" style="width:0%;background:#22c55e;"></div>
@@ -194,6 +197,11 @@
 
   <div id="view-week" style="display:none;">
     <div class="date-label" id="week-range-label2"></div>
+    <div style="display:flex;justify-content:center;gap:8px;margin:-6px 0 12px;">
+      <button class="hbtn" onclick="changeWeek(-1)">◀ 先週</button>
+      <button class="hbtn" onclick="resetWeek()">今週</button>
+      <button class="hbtn" onclick="changeWeek(1)">翌週 ▶</button>
+    </div>
     <div class="week-title">業者別合計</div>
     <div id="week-vendor-summary" style="margin-bottom:1rem;"></div>
     <div class="sec-label">日別明細</div>
@@ -203,6 +211,22 @@
   <div id="view-all" style="display:none;">
     <div class="sec-label">全記録（新しい順）</div>
     <div id="all-records"></div>
+  </div>
+</div>
+
+<div id="mail-modal" style="display:none;">
+  <div class="modal-bg" onclick="closeMailModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title">メールを送る</div>
+      <div class="form-row">
+        <div class="form-label">送る週を選択</div>
+        <select id="mail-week-select"></select>
+      </div>
+      <div class="form-btns">
+        <button class="btn-cancel" onclick="closeMailModal()">キャンセル</button>
+        <button class="btn-save" onclick="sendMailWithOffset()">送信</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -252,9 +276,12 @@ const DAY_CUTOFF_HOUR = 4; // 4:00〜翌3:59 を「同じ日」として集計�
 let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: 'https://script.google.com/macros/s/AKfycbwMHbwTefDWDuq2YETDqVK5P8_saNKN8YwsvSpgtGCRP6yxWTH_Rg1Jhsdc-BXKp6Us/exec' };
 let active = null, activeStart = null;
 let records = [];
+let completing = false;
+let weekOffset = 0; // 0=今週, -1=先週 ...
 let currentTab = 'today';
 let editIdx = null;
 let syncStatus = 'none';
+let earnings = {}; // dayKey -> { uber:number, demae:number, rocket:{delivery:number, quest:number} }
 
 function loadData() {
   try {
@@ -262,6 +289,8 @@ function loadData() {
     if (c) cfg = Object.assign(cfg, JSON.parse(c));
     const r = localStorage.getItem('fdc_records');
     if (r) records = JSON.parse(r).map(x => ({ ...x, start: new Date(x.start), end: new Date(x.end) }));
+    const e = localStorage.getItem('fdc_earnings');
+    if (e) earnings = JSON.parse(e) || {};
     const a = localStorage.getItem('fdc_active');
     if (a) { const ad = JSON.parse(a); active = ad.vendor; activeStart = new Date(ad.start); }
     document.getElementById('week-start').value = cfg.weekStart;
@@ -275,6 +304,7 @@ function saveLocalData() {
   try {
     localStorage.setItem('fdc_cfg', JSON.stringify(cfg));
     localStorage.setItem('fdc_records', JSON.stringify(records));
+    localStorage.setItem('fdc_earnings', JSON.stringify(earnings));
     if (active) localStorage.setItem('fdc_active', JSON.stringify({ vendor: active, start: activeStart }));
     else localStorage.removeItem('fdc_active');
   } catch(e) {}
@@ -299,6 +329,48 @@ function switchTab(tab) {
     document.getElementById('tab-'+t).className = 'tab'+(t===tab?' active':'');
     document.getElementById('view-'+t).style.display = t===tab?'block':'none';
   });
+  render();
+}
+
+function changeWeek(delta) {
+  weekOffset += delta;
+  render();
+}
+function resetWeek() {
+  weekOffset = 0;
+  render();
+}
+
+function money(n) {
+  const x = Math.round(Number(n) || 0);
+  return '¥' + x.toLocaleString('ja-JP');
+}
+function moneyInputValue(n) {
+  const x = Math.round(Number(n) || 0);
+  return String(x);
+}
+function safeNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+function ensureDayEarnings(dayKey) {
+  if (!earnings[dayKey]) earnings[dayKey] = {};
+  if (typeof earnings[dayKey].uber !== 'number') earnings[dayKey].uber = 0;
+  if (typeof earnings[dayKey].demae !== 'number') earnings[dayKey].demae = 0;
+  if (!earnings[dayKey].rocket || typeof earnings[dayKey].rocket !== 'object') earnings[dayKey].rocket = {};
+  if (typeof earnings[dayKey].rocket.delivery !== 'number') earnings[dayKey].rocket.delivery = 0;
+  if (typeof earnings[dayKey].rocket.quest !== 'number') earnings[dayKey].rocket.quest = 0;
+  return earnings[dayKey];
+}
+function setEarning(dayKey, vendor, field, value) {
+  const d = ensureDayEarnings(dayKey);
+  const v = Math.max(0, Math.round(safeNum(value)));
+  if (vendor === 'rocket') {
+    d.rocket[field] = v;
+  } else {
+    d[vendor] = v;
+  }
+  saveLocalData();
   render();
 }
 
@@ -584,6 +656,15 @@ function getWeekRange(now) {
   return { start, end };
 }
 
+function getWeekRangeWithOffset(now, offsetWeeks) {
+  const { start, end } = getWeekRange(now);
+  const s = new Date(start);
+  const e = new Date(end);
+  s.setDate(s.getDate() + 7 * offsetWeeks);
+  e.setDate(e.getDate() + 7 * offsetWeeks);
+  return { start: s, end: e };
+}
+
 function businessDayKey(d) {
   const dt = new Date(d);
   const shifted = new Date(dt.getTime() - DAY_CUTOFF_HOUR * 3600000);
@@ -664,7 +745,8 @@ async function saveRecord() {
 }
 
 function startDel(v) {
-  if (active) completeDel();
+  if (completing) return;
+  if (active) return; // 稼働中は誤操作防止（完了ボタンで終了）
   active = v; activeStart = new Date();
   ['uber','demae','rocket'].forEach(x => document.getElementById('vbtn-'+x).className='vbtn');
   document.getElementById('vbtn-'+v).className='vbtn active-'+v;
@@ -672,18 +754,29 @@ function startDel(v) {
 }
 
 async function completeDel() {
-  if (!active) return;
-  const end = new Date();
-  const rec = { vendor:active, start:new Date(activeStart), end, duration:Math.floor((end-activeStart)/1000) };
-  records.push(rec);
-  records.sort((a,b) => a.start-b.start);
-  if (cfg.gasUrl) {
-    await postToGAS({ service:V[active].name, start:rec.start.toISOString(), end:end.toISOString() });
-    setTimeout(syncFromGAS, 1500);
+  if (!active || !activeStart) return;
+  if (completing) return;
+  completing = true;
+  const btn = document.getElementById('done-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '保存中...';
   }
-  ['uber','demae','rocket'].forEach(x => document.getElementById('vbtn-'+x).className='vbtn');
-  active = null; activeStart = null;
-  saveLocalData(); render();
+  try {
+    const end = new Date();
+    const rec = { vendor:active, start:new Date(activeStart), end, duration:Math.floor((end-activeStart)/1000) };
+    records.push(rec);
+    records.sort((a,b) => a.start-b.start);
+    if (cfg.gasUrl) {
+      await postToGAS({ service:V[active].name, start:rec.start.toISOString(), end:end.toISOString() });
+      setTimeout(syncFromGAS, 1500);
+    }
+    ['uber','demae','rocket'].forEach(x => document.getElementById('vbtn-'+x).className='vbtn');
+    active = null; activeStart = null;
+    saveLocalData(); render();
+  } finally {
+    completing = false;
+  }
 }
 
 async function deleteRecord(idx) {
@@ -697,16 +790,40 @@ async function deleteRecord(idx) {
   saveLocalData(); render();
 }
 
-function sendMail() {
+function openMailModal() {
   const now = new Date();
-  const { start:ws, end:we } = getWeekRange(now);
+  const sel = document.getElementById('mail-week-select');
+  sel.innerHTML = '';
+  for (let i = 0; i <= 8; i++) {
+    const { start:ws, end:we } = getWeekRangeWithOffset(now, -i);
+    const wsKey = businessDayKey(ws);
+    const weKey = businessDayKey(new Date(we.getTime() - 1));
+    const label = (i === 0 ? '今週: ' : i + '週前: ') + businessDayLabelShortFromKey(wsKey) + '〜' + businessDayLabelShortFromKey(weKey);
+    const opt = document.createElement('option');
+    opt.value = -i;
+    opt.textContent = label;
+    sel.appendChild(opt);
+  }
+  document.getElementById('mail-modal').style.display = 'block';
+}
+function closeMailModal() {
+  document.getElementById('mail-modal').style.display = 'none';
+}
+function sendMailWithOffset() {
+  const offset = parseInt(document.getElementById('mail-week-select').value);
+  closeMailModal();
+  sendMail(offset);
+}
+function sendMail(offset = 0) {
+  const now = new Date();
+  const { start:ws, end:we } = getWeekRangeWithOffset(now, offset);
   const weekRecs = records.filter(r => r.start>=ws&&r.start<=we);
-  if (weekRecs.length===0) { alert('今週の記録がありません'); return; }
+  if (weekRecs.length===0) { alert('この週の記録がありません'); return; }
   const byV={};
   weekRecs.forEach(r=>{byV[r.vendor]=(byV[r.vendor]||0)+r.duration;});
   const weekTotal=Object.values(byV).reduce((s,v)=>s+v,0);
   const wsKey = businessDayKey(ws);
-  const weKey = businessDayKey(new Date(we.getTime() - 1)); // endは翌週4:00直前なので-1ms
+  const weKey = businessDayKey(new Date(we.getTime() - 1));
   const subj=encodeURIComponent('フーデリ稼働記録 '+businessDayLabelShortFromKey(wsKey)+'〜'+businessDayLabelShortFromKey(weKey));
   let body='【稼働記録】\n'+businessDayLabelShortFromKey(wsKey)+' 〜 '+businessDayLabelShortFromKey(weKey)+'（4:00締め）\n\n【業者別合計】\n';
   Object.keys(V).forEach(v=>{if(byV[v])body+=V[v].name+': '+fmt(byV[v])+'\n';});
@@ -718,8 +835,13 @@ function sendMail() {
     byDay[dk].items.push(r);
   });
   Object.values(byDay).sort((a,b)=> (a.key>b.key?1:-1)).forEach(day=>{
+    const dayByV={};
+    day.items.forEach(r=>{dayByV[r.vendor]=(dayByV[r.vendor]||0)+r.duration;});
+    const daySec=Object.values(dayByV).reduce((s,v)=>s+v,0);
     body+='\n'+businessDayLabelShortFromKey(day.key)+'\n';
-    day.items.forEach(r=>{body+='  '+V[r.vendor].name+' '+tStr(r.start)+'〜'+tStr(r.end)+' ('+fmt(r.duration)+')'+(r.manual?' [手動]':'')+'\n';});
+    Object.keys(V).forEach(v=>{if(dayByV[v])body+='  '+V[v].name+': '+fmt(dayByV[v])+'\n';});
+    body+='  ─ 合計: '+fmt(daySec)+'\n';
+    day.items.forEach(r=>{body+='  ('+V[r.vendor].name+' '+tStr(r.start)+'〜'+tStr(r.end)+')'+(r.manual?' [手動]':'')+'\n';});
   });
   window.location.href='mailto:'+(cfg.mailTo||'')+'?subject='+subj+'&body='+encodeURIComponent(body);
 }
@@ -760,18 +882,58 @@ function render() {
   document.getElementById('today-sub').textContent=parts.join(' / ')||'-';
   Object.keys(V).forEach(v=>{document.getElementById('vt-'+v).textContent=fmt(byV[v]||0);});
 
-  // 今日タブの業者別合計欄
-  const tvs = Object.keys(V).map(v => {
-    const sec = byV[v] || 0;
-    return `<div class="week-vendor-row">
-      <span style="display:flex;align-items:center;gap:6px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
-        <span>${V[v].name}</span>
+  // 今日タブの売上入力欄（4:00締め）
+  const dEarn = ensureDayEarnings(todayKey);
+  const uberY = dEarn.uber || 0;
+  const demaeY = dEarn.demae || 0;
+  const rocketDel = dEarn.rocket?.delivery || 0;
+  const rocketQuest = dEarn.rocket?.quest || 0;
+  const todayEarnTotal = uberY + demaeY + rocketDel + rocketQuest;
+  const hourly = todaySec > 0 ? Math.round(todayEarnTotal / (todaySec / 3600)) : 0;
+  if (!document.activeElement || !document.activeElement.closest('#today-earnings')) {
+  document.getElementById('today-earnings').innerHTML = `
+    <div class="week-vendor-row" style="gap:10px;align-items:center;">
+      <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${V.uber.color};display:inline-block;"></span>
+        <span>${V.uber.name}</span>
       </span>
-      <span>${fmt(sec)}</span>
-    </div>`;
-  }).join('');
-  document.getElementById('today-vendor-summary').innerHTML = tvs;
+      <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:140px;text-align:right;"
+        value="${moneyInputValue(uberY)}"
+        oninput="setEarning('${todayKey}','uber',null,this.value)">
+      <span style="color:#888;font-size:11px;">円</span>
+    </div>
+    <div class="week-vendor-row" style="gap:10px;align-items:center;">
+      <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${V.demae.color};display:inline-block;"></span>
+        <span>${V.demae.name}</span>
+      </span>
+      <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:140px;text-align:right;"
+        value="${moneyInputValue(demaeY)}"
+        oninput="setEarning('${todayKey}','demae',null,this.value)">
+      <span style="color:#888;font-size:11px;">円</span>
+    </div>
+    <div class="week-vendor-row" style="gap:10px;align-items:center;">
+      <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${V.rocket.color};display:inline-block;"></span>
+        <span>${V.rocket.name}</span>
+      </span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:82px;text-align:right;"
+          value="${moneyInputValue(rocketDel)}"
+          oninput="setEarning('${todayKey}','rocket','delivery',this.value)">
+        <span style="color:#888;font-size:10px;">配達</span>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:82px;text-align:right;"
+          value="${moneyInputValue(rocketQuest)}"
+          oninput="setEarning('${todayKey}','rocket','quest',this.value)">
+        <span style="color:#888;font-size:10px;">クエ</span>
+      </div>
+    </div>
+    <div class="week-total-row" style="border-top:1px solid #eee;">
+      <span>合計売上 / 時給</span>
+      <span>${money(todayEarnTotal)} / ${todaySec>0?money(hourly)+'/h':'-'}</span>
+    </div>
+  `;
+  } // end focus guard
 
   const {start:ws,end:we}=getWeekRange(now);
   const weekRecs=records.filter(r=>r.start>=ws&&r.start<=we);
@@ -786,7 +948,13 @@ function render() {
   document.getElementById('prog-pct').textContent=pct+'%';
   const wrl=dateStr(ws)+' 〜 '+dateStr(we);
   document.getElementById('week-range-label').textContent=wrl;
-  document.getElementById('week-range-label2').textContent=wrl;
+  const { start:ws2, end:we2 } = getWeekRangeWithOffset(now, weekOffset);
+  const wrl2=dateStr(ws2)+' 〜 '+dateStr(we2);
+  let weekSuffix = '';
+  if (weekOffset !== 0) {
+    weekSuffix = `（${weekOffset < 0 ? Math.abs(weekOffset) + '週前' : weekOffset + '週後'}）`;
+  }
+  document.getElementById('week-range-label2').textContent = wrl2 + weekSuffix;
 
   const aa=document.getElementById('active-area');
   if(active&&activeStart){
@@ -800,10 +968,18 @@ function render() {
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
         <div class="active-time">${fmtFull(elapsed)}</div>
-        <button class="done-btn" onclick="completeDel()">完了</button>
+        <button class="done-btn" id="done-btn" onclick="completeDel()" ${completing?'disabled':''}>${completing?'保存中...':'完了'}</button>
       </div>
     </div></div>`;
   } else {aa.innerHTML='';}
+
+  // 稼働中は開始ボタン誤操作を防ぐ
+  ['uber','demae','rocket'].forEach(x => {
+    const el = document.getElementById('vbtn-'+x);
+    if (!el) return;
+    if (active) el.classList.add('disabled');
+    else el.classList.remove('disabled');
+  });
 
   const ht=document.getElementById('hist-today');
   ht.innerHTML=todayRecs.length===0?'<div class="empty">まだ記録がありません</div>':
@@ -811,7 +987,8 @@ function render() {
 
   if(currentTab==='week'){
     const wByV={};
-    weekRecs.forEach(r=>{wByV[r.vendor]=(wByV[r.vendor]||0)+r.duration;});
+    const weekRecs2=records.filter(r=>r.start>=ws2&&r.start<=we2);
+    weekRecs2.forEach(r=>{wByV[r.vendor]=(wByV[r.vendor]||0)+r.duration;});
     const wTotal=Object.values(wByV).reduce((s,v)=>s+v,0);
     let vs=Object.keys(V).filter(v=>wByV[v]).map(v=>`<div class="week-vendor-row">
       <span style="display:flex;align-items:center;gap:6px;">
@@ -823,15 +1000,45 @@ function render() {
     vs+=`<div class="week-total-row"><span>合計</span><span>${fmt(wTotal)} / ${cfg.weekMax}:00</span></div>`;
     document.getElementById('week-vendor-summary').innerHTML=vs||'<div class="empty">今週の記録がありません</div>';
     const byDay={};
-    weekRecs.forEach(r=>{
+    weekRecs2.forEach(r=>{
       const dk=businessDayKey(r.start);
       if(!byDay[dk])byDay[dk]={key:dk,items:[]};
       byDay[dk].items.push(r);
     });
     document.getElementById('week-detail').innerHTML=Object.values(byDay)
       .sort((a,b)=> (a.key<b.key?1:-1))
-      .map(day=> `<div class="day-group"><div class="day-label">${businessDayLabelShortFromKey(day.key)}</div>${day.items.map(r=>recordItem(r)).join('')}</div>`)
+      .map(day=> {
+        const dk = day.key;
+        const de = ensureDayEarnings(dk);
+        const dayByV = {};
+        day.items.forEach(r => { dayByV[r.vendor] = (dayByV[r.vendor]||0) + r.duration; });
+        const daySec = Object.values(dayByV).reduce((s,v)=>s+v, 0);
+        const uY = de.uber||0, dY = de.demae||0, rDel = de.rocket?.delivery||0, rQst = de.rocket?.quest||0;
+        const dayEarn = uY + dY + rDel + rQst;
+        const dayHourly = daySec > 0 ? Math.round(dayEarn / (daySec/3600)) : 0;
+        const vtRows = Object.keys(V).filter(v=>dayByV[v]).map(v=>
+          `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0;">
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+              ${V[v].name}
+            </span>
+            <span style="font-size:13px;font-weight:600;color:#111;">${fmt(dayByV[v])}</span>
+          </div>`
+        ).join('');
+        return `<div class="day-group">
+          <div class="day-label">${businessDayLabelShortFromKey(dk)}</div>
+          ${day.items.map(r=>recordItem(r)).join('')}
+          <div style="margin-top:8px;padding:8px 10px;background:#f9f9f9;border-radius:8px;border:1px solid #eee;">
+            ${vtRows}
+            <div style="display:flex;justify-content:space-between;padding:5px 0 0;font-size:12px;font-weight:600;color:#111;">
+              <span>${businessDayLabelShortFromKey(dk)} 合計</span>
+              <span>${fmt(daySec)}</span>
+            </div>
+          </div>
+        </div>`;
+      })
       .join('')||'<div class="empty">今週の記録がありません</div>';
+
   }
 
   if(currentTab==='all'){
@@ -843,7 +1050,32 @@ function render() {
     });
     document.getElementById('all-records').innerHTML=Object.values(byDay)
       .sort((a,b)=> (a.key<b.key?1:-1))
-      .map(day=> `<div class="day-group"><div class="day-label">${businessDayLabelShortFromKey(day.key)}</div>${day.items.map(r=>recordItem(r)).join('')}</div>`)
+      .map(day=> {
+        const dk = day.key;
+        const dayByV = {};
+        day.items.forEach(r => { dayByV[r.vendor] = (dayByV[r.vendor]||0) + r.duration; });
+        const daySec = Object.values(dayByV).reduce((s,v)=>s+v, 0);
+        const vtRows = Object.keys(V).filter(v=>dayByV[v]).map(v=>
+          `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0;">
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+              ${V[v].name}
+            </span>
+            <span style="font-size:13px;font-weight:600;color:#111;">${fmt(dayByV[v])}</span>
+          </div>`
+        ).join('');
+        return `<div class="day-group">
+          <div class="day-label">${businessDayLabelShortFromKey(dk)}</div>
+          ${day.items.map(r=>recordItem(r)).join('')}
+          <div style="margin-top:8px;padding:8px 10px;background:#f9f9f9;border-radius:8px;border:1px solid #eee;">
+            ${vtRows}
+            <div style="display:flex;justify-content:space-between;padding:5px 0 0;font-size:12px;font-weight:600;color:#111;">
+              <span>${businessDayLabelShortFromKey(dk)} 合計</span>
+              <span>${fmt(daySec)}</span>
+            </div>
+          </div>
+        </div>`;
+      })
       .join('')||'<div class="empty">記録がありません</div>';
   }
 }
