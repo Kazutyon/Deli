@@ -549,13 +549,10 @@ async function syncFromGAS() {
 
       // clientId が一致するものは「同じ操作から生まれた同一記録」として最優先でマージする
       const incomingByClientId = new Map(newRecords.filter(r => r.clientId).map(r => [String(r.clientId), r]));
-      const existingByClientId = new Map(records.filter(r => r && r.clientId).map(r => [String(r.clientId), r]));
 
-      // GASに同じclientIdが来たら、ローカル仮レコード(pending)は消す
-      records = records.filter(r => {
-        if (!r || !r.pending || !r.clientId) return true;
-        return !incomingByClientId.has(String(r.clientId));
-      });
+      // 重要：pendingを先に削除しない。
+      // pendingを残したまま下のループでGAS版に置き換える。
+      // 先に消すと、1回目の同期で画面から消えることがある。
 
       // 端末差や一部行欠損があっても確実に反映できるよう、IDでもマージする
       const incomingById = new Map(newRecords.filter(r => r.id).map(r => [String(r.id), r]));
@@ -587,7 +584,7 @@ async function syncFromGAS() {
       for (const r of newRecords) {
         const id = r.id ? String(r.id) : null;
         const cid = r.clientId ? String(r.clientId) : null;
-        if (cid && existingByClientId.has(cid)) continue;
+        if (cid && merged.some(m => m && m.clientId && String(m.clientId) === cid)) continue;
         if (!id || !existingById.has(id)) merged.push(r);
       }
 
