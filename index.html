@@ -273,7 +273,7 @@ const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ
 const DAY_CUTOFF_HOUR = 4; // 4:00〜翌3:59 を「同じ日」として集計（Uber締め）
 
 // 正しい
-let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: 'https://script.google.com/macros/s/AKfycbwMHbwTefDWDuq2YETDqVK5P8_saNKN8YwsvSpgtGCRP6yxWTH_Rg1Jhsdc-BXKp6Us/exec' };
+let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: 'https://script.google.com/macros/s/AKfycbxW8m3QiNOfElKdGygJ5KuflBbWUmEeittVMIHaY0qOnsBNZ7IoaEr0Clq6pfpWSFZO/exec' };
 let active = null, activeStart = null;
 let records = [];
 let completing = false;
@@ -287,6 +287,7 @@ function loadData() {
   try {
     const c = localStorage.getItem('fdc_cfg');
     if (c) cfg = Object.assign(cfg, JSON.parse(c));
+    if (!cfg.gasUrl || cfg.gasUrl.indexOf('AKfycbwMH') !== -1) cfg.gasUrl = 'https://script.google.com/macros/s/AKfycbxW8m3QiNOfElKdGygJ5KuflBbWUmEeittVMIHaY0qOnsBNZ7IoaEr0Clq6pfpWSFZO/exec';
     const r = localStorage.getItem('fdc_records');
     if (r) records = JSON.parse(r).map(x => ({ ...x, start: new Date(x.start), end: new Date(x.end) }));
     const e = localStorage.getItem('fdc_earnings');
@@ -508,12 +509,14 @@ async function syncFromGAS() {
 
         return {
           id: r.id,
+          clientId: r.clientId || '',
           vendor,
           start,
           end,
           duration,
           manual: r.manual,
           synced: true,
+          pending: false,
           estimated: (!startDt || !endDt)
         };
       }).filter(r =>
@@ -544,7 +547,17 @@ async function syncFromGAS() {
         return Math.abs(as - bs) <= 2000 && Math.abs(ae - be) <= 2000;
       };
 
-      // 端末差や一部行欠損があっても確実に反映できるよう、IDでマージする
+      // clientId が一致するものは「同じ操作から生まれた同一記録」として最優先でマージする
+      const incomingByClientId = new Map(newRecords.filter(r => r.clientId).map(r => [String(r.clientId), r]));
+      const existingByClientId = new Map(records.filter(r => r && r.clientId).map(r => [String(r.clientId), r]));
+
+      // GASに同じclientIdが来たら、ローカル仮レコード(pending)は消す
+      records = records.filter(r => {
+        if (!r || !r.pending || !r.clientId) return true;
+        return !incomingByClientId.has(String(r.clientId));
+      });
+
+      // 端末差や一部行欠損があっても確実に反映できるよう、IDでもマージする
       const incomingById = new Map(newRecords.filter(r => r.id).map(r => [String(r.id), r]));
       const existingById = new Map(records.filter(r => r && r.id).map(r => [String(r.id), r]));
       const incomingByKey = new Map(newRecords.map(r => [keyFor(r), r]).filter(([k]) => k));
@@ -553,6 +566,11 @@ async function syncFromGAS() {
       const merged = [];
       for (const r of records) {
         if (!r) continue;
+        const cid = r.clientId ? String(r.clientId) : null;
+        if (cid && incomingByClientId.has(cid)) {
+          merged.push(incomingByClientId.get(cid));
+          continue;
+        }
         const id = r.id ? String(r.id) : null;
         if (r.synced) {
           if (id && incomingById.has(id)) merged.push(incomingById.get(id));
@@ -568,13 +586,15 @@ async function syncFromGAS() {
       // incomingにあって、既存に無いものを追加
       for (const r of newRecords) {
         const id = r.id ? String(r.id) : null;
+        const cid = r.clientId ? String(r.clientId) : null;
+        if (cid && existingByClientId.has(cid)) continue;
         if (!id || !existingById.has(id)) merged.push(r);
       }
 
       // 最後に重複排除（GAS+ローカルの二重化対策）
       const seen = new Set();
       records = merged.filter(r => {
-        const k = (r.id ? `id:${r.id}` : `k:${keyFor(r)}`) || null;
+        const k = (r.clientId ? `cid:${r.clientId}` : (r.id ? `id:${r.id}` : `k:${keyFor(r)}`)) || null;
         if (!k) return true;
         if (seen.has(k)) return false;
         seen.add(k);
@@ -726,18 +746,24 @@ async function saveRecord() {
   const end = new Date(date+'T'+endT);
   if (end<=start) { alert('終了時刻は開始時刻より後にしてください'); return; }
   const duration = Math.floor((end-start)/1000);
+
   if (editIdx !== null) {
     const oldRec = records[editIdx];
-    records[editIdx] = { ...oldRec, vendor, start, end, duration, manual: true };
+    const clientId = oldRec.clientId || ('manual-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    records[editIdx] = { ...oldRec, clientId, vendor, start, end, duration, manual: true, pending: !!cfg.gasUrl && !oldRec.id };
     if (cfg.gasUrl && oldRec.id) {
-      await postToGAS({ action:'update', id:oldRec.id, service:V[vendor].name, start:start.toISOString(), end:end.toISOString() });
+      await postToGAS({ action:'update', id:oldRec.id, clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true });
+      setTimeout(syncFromGAS, 1500);
+    } else if (cfg.gasUrl) {
+      await postToGAS({ clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true });
       setTimeout(syncFromGAS, 1500);
     }
   } else {
-    records.push({ vendor, start, end, duration, manual: true });
+    const clientId = 'manual-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    records.push({ clientId, vendor, start, end, duration, manual: true, pending: !!cfg.gasUrl });
     records.sort((a,b) => a.start-b.start);
     if (cfg.gasUrl) {
-      await postToGAS({ service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true });
+      await postToGAS({ clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true });
       setTimeout(syncFromGAS, 1500);
     }
   }
@@ -764,13 +790,30 @@ async function completeDel() {
   }
   try {
     const end = new Date();
-    const rec = { vendor:active, start:new Date(activeStart), end, duration:Math.floor((end-activeStart)/1000) };
+    const clientId = 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    const currentVendor = active;
+    const rec = {
+      clientId,
+      vendor: currentVendor,
+      start: new Date(activeStart),
+      end,
+      duration: Math.floor((end - activeStart) / 1000),
+      pending: !!cfg.gasUrl
+    };
+
     records.push(rec);
     records.sort((a,b) => a.start-b.start);
+
     if (cfg.gasUrl) {
-      await postToGAS({ service:V[active].name, start:rec.start.toISOString(), end:end.toISOString() });
+      await postToGAS({
+        clientId,
+        service: V[currentVendor].name,
+        start: rec.start.toISOString(),
+        end: end.toISOString()
+      });
       setTimeout(syncFromGAS, 1500);
     }
+
     ['uber','demae','rocket'].forEach(x => document.getElementById('vbtn-'+x).className='vbtn');
     active = null; activeStart = null;
     saveLocalData(); render();
@@ -848,7 +891,7 @@ function sendMail(offset = 0) {
 
 function recordItem(r) {
   const idx = records.indexOf(r);
-  const tags=(r.manual?'<span class="manual-tag">手動</span>':'')+(r.synced?'<span class="gas-tag">GAS</span>':'');
+  const tags=(r.manual?'<span class="manual-tag">手動</span>':'')+(r.synced?'<span class="gas-tag">GAS</span>':'')+(r.pending?'<span class="manual-tag">送信中</span>':'');
   return `<div class="hitem">
     <div style="display:flex;align-items:center;gap:8px;">
       <div class="hdot" style="background:${V[r.vendor].color}"></div>
