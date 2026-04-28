@@ -939,6 +939,7 @@ function render() {
       </span>
       <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:140px;text-align:right;"
         value="${moneyInputValue(uberY)}"
+        onfocus="this.select()"
         oninput="setEarning('${todayKey}','uber',null,this.value)">
       <span style="color:#888;font-size:11px;">円</span>
     </div>
@@ -949,6 +950,7 @@ function render() {
       </span>
       <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:140px;text-align:right;"
         value="${moneyInputValue(demaeY)}"
+        onfocus="this.select()"
         oninput="setEarning('${todayKey}','demae',null,this.value)">
       <span style="color:#888;font-size:11px;">円</span>
     </div>
@@ -960,10 +962,12 @@ function render() {
       <div style="display:flex;gap:6px;align-items:center;">
         <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:82px;text-align:right;"
           value="${moneyInputValue(rocketDel)}"
+          onfocus="this.select()"
           oninput="setEarning('${todayKey}','rocket','delivery',this.value)">
         <span style="color:#888;font-size:10px;">配達</span>
         <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:82px;text-align:right;"
           value="${moneyInputValue(rocketQuest)}"
+          onfocus="this.select()"
           oninput="setEarning('${todayKey}','rocket','quest',this.value)">
         <span style="color:#888;font-size:10px;">クエ</span>
       </div>
