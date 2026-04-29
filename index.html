@@ -5,94 +5,239 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>フーデリ稼働記録</title>
   <style>
+
+    :root{
+      --green:#21a85b;
+      --green2:#34b768;
+      --blue:#1f6fea;
+      --red:#ff2b35;
+      --ink:#111827;
+      --muted:#6b7280;
+      --line:#edf0f3;
+      --card:#ffffff;
+      --bg:#f7f8f7;
+      --shadow:0 14px 38px rgba(31,41,55,.07);
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #f7f7f7; color: #333; }
-    .app { max-width: 420px; margin: 0 auto; padding: 1rem; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-    .header h1 { font-size: 17px; font-weight: 600; color: #111; }
-    .header-btns { display: flex; gap: 6px; }
-    .hbtn { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #555; cursor: pointer; }
-    .hbtn:hover { background: #f0f0f0; }
-    .hbtn.mail { color: #2563eb; border-color: #93c5fd; }
-    .hbtn.add { color: #16a34a; border-color: #86efac; }
-    .sync-bar { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 0.75rem; padding: 6px 10px; background: white; border-radius: 8px; border: 1px solid #eee; }
-    .sync-dot { width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; display: inline-block; }
+    html,body{min-height:100%;}
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(34,197,94,.08), transparent 28%),
+        linear-gradient(180deg,#fbfbfb 0%,#f3f5f4 100%);
+      color: var(--ink);
+    }
+    .app {
+      max-width: 392px;
+      margin: 14px auto;
+      padding: 18px 16px 20px;
+      background: rgba(255,255,255,.92);
+      border: 1px solid #e8ecef;
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      min-height: calc(100vh - 28px);
+    }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .header h1 { font-size: 20px; font-weight: 800; letter-spacing: -.02em; color: #0b1220; }
+    .header-btns { display: flex; align-items:center; gap: 14px; }
+    .hbtn {
+      background: #fff;
+      border: 1px solid #e9edf1;
+      border-radius: 999px;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 0;
+      color: #111827;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(17,24,39,.05);
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+    }
+    .hbtn:hover { background: #f8faf9; transform: translateY(-1px); }
+    .hbtn.add {
+      width: 38px;
+      height: 38px;
+      color: var(--green);
+      border-color: #22c55e;
+      box-shadow: 0 5px 14px rgba(34,197,94,.12);
+    }
+    .hbtn.add::before{content:"+";font-size:32px;line-height:1;font-weight:300;margin-top:-3px;}
+    .hbtn.mail::before{content:"✉";font-size:20px;line-height:1;}
+    .hbtn:not(.add):not(.mail)::before{content:"⚙";font-size:20px;line-height:1;}
+    .sync-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px; color: #4b5563; margin-bottom: 14px;
+      padding: 11px 12px; background: #fff; border-radius: 10px;
+      border: 1px solid #eff2f4; box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
+    }
+    .sync-dot { width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; display: inline-block; vertical-align: -1px; }
     .sync-dot.ok { background: #22c55e; }
     .sync-dot.err { background: #ef4444; }
     .sync-dot.ing { background: #f59e0b; animation: blink2 1s infinite; }
     .sync-dot.none { background: #aaa; }
     @keyframes blink2 { 0%,100%{opacity:1} 50%{opacity:0.3} }
-    .tab-bar { display: flex; gap: 4px; margin-bottom: 1rem; background: #eee; border-radius: 8px; padding: 3px; }
-    .tab { flex: 1; text-align: center; padding: 6px; font-size: 12px; border-radius: 6px; cursor: pointer; color: #888; }
-    .tab.active { background: white; color: #111; font-weight: 600; border: 1px solid #ddd; }
-    .date-label { font-size: 12px; color: #888; margin-bottom: 1rem; text-align: center; }
-    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 0.75rem; }
-    .stat { background: #f0f0f0; border-radius: 8px; padding: 12px; }
-    .stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
-    .stat-value { font-size: 21px; font-weight: 700; color: #111; }
-    .stat-sub { font-size: 10px; color: #aaa; margin-top: 2px; }
-    .progress-wrap { margin-bottom: 1.25rem; }
-    .progress-bar { height: 6px; background: #e5e5e5; border-radius: 3px; overflow: hidden; }
-    .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s, background 0.3s; }
-    .progress-label { display: flex; justify-content: space-between; font-size: 10px; color: #aaa; margin-top: 4px; }
-    .active-card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: white; }
-    .active-row { display: flex; align-items: center; justify-content: space-between; }
+    .tab-bar {
+      display: flex; gap: 0; margin-bottom: 14px; background: #fff;
+      border-radius: 9px; padding: 0; border: 1px solid #e9edf1; overflow:hidden;
+      box-shadow: 0 4px 12px rgba(17,24,39,.03);
+    }
+    .tab {
+      flex: 1; text-align: center; padding: 12px 6px; font-size: 13px;
+      cursor: pointer; color: #4b5563; font-weight: 700; border-radius: 0;
+      transition: background .14s ease, color .14s ease;
+    }
+    .tab.active {
+      background: linear-gradient(180deg,var(--green2),var(--green));
+      color: white; font-weight: 800; border: none; box-shadow: 0 8px 18px rgba(34,197,94,.22);
+    }
+    .date-label { font-size: 13px; color: #4b5563; margin-bottom: 14px; text-align: center; font-weight: 600; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+    .stat {
+      background: #fff; border-radius: 15px; padding: 15px 14px 16px;
+      border:1px solid #edf0f3; min-height:96px; box-shadow: 0 9px 22px rgba(17,24,39,.04);
+      position:relative; overflow:hidden;
+    }
+    .stat-label { font-size: 13px; color: #374151; margin-bottom: 10px; font-weight: 700; }
+    .stat-value { font-size: 30px; font-weight: 800; color: #111827; letter-spacing:-.02em; }
+    .stat:first-child .stat-value{color:var(--green);}
+    .stat-sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .progress-wrap { margin: 8px 0 20px; }
+    .progress-bar { height: 4px; background: #d7dadd; border-radius: 999px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 999px; transition: width 0.3s, background 0.3s; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: #4b5563; margin-top: 10px; }
+    .active-card {
+      border: 1px solid #def3e7; border-radius: 16px; padding: 14px; margin-bottom: 18px; background: #f7fff9;
+      box-shadow: 0 8px 18px rgba(34,197,94,.06);
+    }
+    .active-row { display: flex; align-items: center; justify-content: space-between; gap:10px; }
     .active-left { display: flex; align-items: center; gap: 10px; }
     .pulse { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: blink 1.5s infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-    .active-name { font-size: 14px; font-weight: 600; color: #111; }
-    .active-since { font-size: 11px; color: #888; }
-    .active-time { font-size: 22px; font-weight: 700; color: #111; }
-    .done-btn { background: #22c55e; color: white; border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .done-btn:hover { background: #16a34a; }
-    .done-btn:active { transform: translateY(1px); }
+    .active-name { font-size: 14px; font-weight: 800; color: #111; }
+    .active-since { font-size: 11px; color: #667085; }
+    .active-time { font-size: 20px; font-weight: 800; color: #111; }
+    .done-btn { background: #22c55e; color: white; border: none; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 800; cursor: pointer; }
     .done-btn:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
-    .sec-label { font-size: 11px; color: #888; margin-bottom: 8px; }
-    .vendors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.25rem; }
-    .vbtn { border: 1px solid #ddd; border-radius: 8px; padding: 10px 4px; text-align: center; cursor: pointer; background: white; }
-    .vbtn:hover { background: #f5f5f5; }
+    .sec-label { font-size: 13px; color: #111827; margin: 14px 2px 9px; font-weight: 800; }
+    .vendors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 8px 0 26px; }
+    .vbtn {
+      border: 1px solid #e5e9ed; border-radius: 999px; aspect-ratio: 1 / 1;
+      padding: 13px 4px; text-align: center; cursor: pointer; background: #fff;
+      display:flex; flex-direction:column; justify-content:center; align-items:center;
+      box-shadow: 0 9px 20px rgba(17,24,39,.04);
+      transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+    }
+    .vbtn:hover { background: #fff; transform: translateY(-2px); box-shadow: 0 12px 26px rgba(17,24,39,.07); }
     .vbtn.disabled { opacity: 0.55; pointer-events: none; }
-    .vbtn.active-uber { border: 2px solid #111; }
-    .vbtn.active-demae { border: 2px solid #e8431a; }
-    .vbtn.active-rocket { border: 2px solid #0055ff; }
-    .vicon { font-size: 18px; margin-bottom: 3px; }
-    .vname { font-size: 11px; font-weight: 600; color: #333; }
-    .vtime { font-size: 10px; color: #888; margin-top: 2px; }
-    .hitem { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f0f0f0; }
+    .vbtn.active-uber { border: 2px solid var(--green); }
+    .vbtn.active-demae { border: 2px solid var(--red); }
+    .vbtn.active-rocket { border: 2px solid var(--blue); }
+    .vicon { font-size: 28px; margin-bottom: 6px; line-height:1; }
+    #vbtn-uber .vicon{filter:hue-rotate(70deg) saturate(1.4);}
+    .vname { font-size: 12px; font-weight: 800; color: #111827; }
+    .vtime { font-size: 12px; color: var(--green); margin-top: 6px; font-weight:700; }
+    #vbtn-demae .vtime{color:var(--red);}
+    #vbtn-rocket .vtime{color:var(--blue);}
+    .hitem { display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid #f0f0f0; }
     .hitem:last-child { border-bottom: none; }
     .hdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .hvendor { font-size: 12px; color: #333; }
-    .hrange { font-size: 10px; color: #888; }
-    .hdur { font-size: 12px; font-weight: 600; color: #333; }
-    .edit-btn { background: none; border: none; color: #aaa; cursor: pointer; font-size: 12px; padding: 0 3px; }
+    .hvendor { font-size: 13px; color: #333; font-weight:700; }
+    .hrange { font-size: 11px; color: #888; }
+    .hdur { font-size: 12px; font-weight: 700; color: #333; }
+    .edit-btn, .del-btn { background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 12px; padding: 0 3px; }
     .edit-btn:hover { color: #2563eb; }
-    .del-btn { background: none; border: none; color: #aaa; cursor: pointer; font-size: 13px; padding: 0 3px; }
     .del-btn:hover { color: #ef4444; }
-    .empty { text-align: center; padding: 1rem; font-size: 12px; color: #aaa; }
-    .modal-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .modal { background: white; border-radius: 12px; padding: 1.25rem; width: 310px; border: 1px solid #ddd; }
-    .modal-title { font-size: 15px; font-weight: 600; color: #111; margin-bottom: 1rem; }
+    .empty {
+      text-align: center; padding: 29px 12px; font-size: 13px; color: #6b7280;
+      background:#fff; border-radius:16px; border:1px solid #f0f2f4; box-shadow:0 10px 24px rgba(17,24,39,.03);
+    }
+    .empty::before{content:"▤";font-size:22px;color:#374151;margin-right:10px;vertical-align:-3px;}
+    .modal-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; padding:20px; }
+    .modal { background: white; border-radius: 18px; padding: 1.25rem; width: 310px; border: 1px solid #ddd; box-shadow: var(--shadow); }
+    .modal-title { font-size: 16px; font-weight: 800; color: #111; margin-bottom: 1rem; }
     .form-row { margin-bottom: 12px; }
-    .form-label { font-size: 11px; color: #888; margin-bottom: 4px; }
-    .form-row select, .form-row input { width: 100%; font-size: 13px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; }
+    .form-label { font-size: 12px; color: #667085; margin-bottom: 5px; font-weight:700; }
+    .form-row select, .form-row input, #today-earnings input {
+      font-size: 15px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px;
+      background: white; color: #111827; outline:none;
+    }
+    .form-row select, .form-row input{width:100%;}
+    .form-row select:focus, .form-row input:focus, #today-earnings input:focus{border-color:#86efac; box-shadow:0 0 0 3px rgba(34,197,94,.12);}
     .form-btns { display: flex; gap: 8px; margin-top: 1rem; }
-    .btn-cancel { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: none; color: #888; font-size: 13px; cursor: pointer; }
-    .btn-save { flex: 1; padding: 8px; border: none; border-radius: 8px; background: #3b82f6; color: white; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .settings-panel { border: 1px solid #ddd; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; background: #f9f9f9; }
-    .settings-title { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 12px; }
+    .btn-cancel { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 10px; background: none; color: #667085; font-size: 13px; font-weight:700; cursor: pointer; }
+    .btn-save { flex: 1; padding: 10px; border: none; border-radius: 10px; background: #22c55e; color: white; font-size: 13px; font-weight: 800; cursor: pointer; }
+    .settings-panel { border: 1px solid #e5e9ed; border-radius: 16px; padding: 1rem; margin-bottom: 1.25rem; background: #fff; box-shadow:0 8px 20px rgba(17,24,39,.03); }
+    .settings-title { font-size: 14px; font-weight: 800; color: #111; margin-bottom: 12px; }
     .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
     .setting-row:last-child { margin-bottom: 0; }
-    .setting-name { font-size: 12px; color: #666; }
-    .setting-row select { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; }
-    .setting-row input[type=number] { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; width: 60px; text-align: right; }
-    .setting-row input[type=email], .setting-row input[type=url] { font-size: 11px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; width: 100%; }
-    .week-title { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 8px; }
-    .week-vendor-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
-    .week-total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; font-weight: 600; color: #111; border-top: 1px solid #ddd; margin-top: 4px; }
-    .day-group { margin-bottom: 12px; }
-    .day-label { font-size: 12px; font-weight: 600; color: #888; margin-bottom: 6px; }
+    .setting-name { font-size: 12px; color: #555; font-weight:700; }
+    .setting-row select, .setting-row input { font-size: 12px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; }
+    .setting-row input[type=number] { width: 60px; text-align: right; }
+    .setting-row input[type=email], .setting-row input[type=url] { font-size: 11px; width: 100%; }
+    .week-title { font-size: 14px; font-weight: 800; color: #111; margin-bottom: 8px; }
+    .week-vendor-row {
+      display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #edf0f3; font-size: 13px;
+    }
+    .week-total-row {
+      display: flex; justify-content: space-between; padding: 12px 0 4px; font-size: 15px; font-weight: 800; color: #111; border-top: 1px solid #e5e7eb; margin-top: 4px;
+    }
+    .week-total-row span:last-child{color:#159447;}
+    .day-group { margin-bottom: 14px; }
+    .day-label { font-size: 13px; font-weight: 800; color: #667085; margin-bottom: 6px; }
     .manual-tag { font-size: 9px; background: #fef3c7; color: #d97706; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
     .gas-tag { font-size: 9px; background: #dcfce7; color: #16a34a; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+    #today-earnings{background:#fff;border-radius:0;padding:0;margin-bottom:14px;}
+    @media (max-width:430px){
+      .app{margin:8px;max-width:none;border-radius:20px;padding:17px 15px 20px;}
+      .header h1{font-size:19px;}
+      .header-btns{gap:11px;}
+      .vendors{gap:12px;}
+    }
+
+  </style>
+
+  <style>
+    /* ===== スマホ向けコンパクト調整 ===== */
+    .app { margin: 8px auto; padding: 14px 14px 16px; border-radius: 20px; min-height: calc(100vh - 16px); }
+    .header { margin-bottom: 10px; }
+    .header h1 { font-size: 18px; }
+    .header-btns { gap: 9px; }
+    .hbtn { width: 31px; height: 31px; }
+    .hbtn.add { width: 35px; height: 35px; }
+    .hbtn.add::before { font-size: 29px; }
+    .hbtn.mail::before, .hbtn:not(.add):not(.mail)::before { font-size: 18px; }
+    .sync-bar { margin-bottom: 9px; padding: 8px 10px; font-size: 11.5px; border-radius: 9px; }
+    .tab-bar { margin-bottom: 9px; border-radius: 9px; }
+    .tab { padding: 10px 6px; font-size: 13px; }
+    .date-label { margin-bottom: 9px; font-size: 12.5px; }
+    .stats { gap: 9px; margin-bottom: 10px; }
+    .stat { min-height: 78px; padding: 11px 11px 10px; border-radius: 14px; }
+    .stat-label { font-size: 12.5px; margin-bottom: 6px; }
+    .stat-value { font-size: 27px; line-height: 1.05; }
+    .stat-sub { font-size: 11.5px; margin-top: 4px; }
+    .sec-label { margin: 10px 2px 6px; font-size: 12.5px; }
+    #today-earnings { margin-bottom: 8px !important; }
+    #today-earnings .week-vendor-row { padding: 5px 0 !important; min-height: 34px; font-size: 12.5px; }
+    #today-earnings input { height: 30px; padding: 5px 8px; font-size: 14px; border-radius: 8px; }
+    #today-earnings input[style*="width:140px"] { width: 118px !important; }
+    #today-earnings input[style*="width:82px"] { width: 64px !important; }
+    #today-earnings .week-total-row { padding: 8px 0 2px !important; font-size: 14px; }
+    .progress-wrap { margin: 5px 0 10px; }
+    .progress-label { margin-top: 6px; font-size: 11.5px; }
+    .active-card { padding: 10px 11px; margin-bottom: 10px; border-radius: 14px; }
+    .active-time { font-size: 18px; }
+    .done-btn { padding: 7px 12px; font-size: 12.5px; }
+    .vendors { gap: 10px; margin: 6px 0 14px; }
+    .vbtn { aspect-ratio: auto; height: 82px; border-radius: 24px; padding: 8px 3px; }
+    .vicon { font-size: 24px; margin-bottom: 4px; }
+    .vname { font-size: 11.5px; line-height: 1.2; }
+    .vtime { font-size: 11.5px; margin-top: 4px; }
+    .empty { padding: 18px 10px; border-radius: 14px; font-size: 12.5px; }
+    .empty::before { font-size: 19px; margin-right: 8px; }
+    @media (max-width:430px){ .app{margin:6px;max-width:none;border-radius:18px;padding:13px 13px 15px;} .header h1{font-size:18px;} .header-btns{gap:8px;} .vendors{gap:9px;} }
   </style>
 </head>
 <body>
@@ -100,15 +245,15 @@
   <div class="header">
     <h1>フーデリ稼働記録</h1>
     <div class="header-btns">
-      <button class="hbtn add" onclick="openModal(null)">+ 追加</button>
-      <button class="hbtn mail" onclick="openMailModal()">メール</button>
-      <button class="hbtn" onclick="toggleSettings()">設定</button>
+      <button class="hbtn add" onclick="openModal(null)" title="追加" aria-label="追加"></button>
+      <button class="hbtn mail" onclick="openMailModal()" title="メール" aria-label="メール"></button>
+      <button class="hbtn" onclick="toggleSettings()" title="設定" aria-label="設定"></button>
     </div>
   </div>
 
   <div id="sync-bar" class="sync-bar">
     <span><span class="sync-dot none" id="sync-dot"></span><span id="sync-msg">GAS URL未設定（ローカル保存中）</span></span>
-    <button onclick="syncFromGAS()" style="background:none;border:none;font-size:11px;color:#2563eb;cursor:pointer;">更新</button>
+    <button onclick="syncFromGAS()" style="background:none;border:none;font-size:12px;color:#16a34a;font-weight:700;cursor:pointer;">更新</button>
   </div>
 
   <div id="settings-panel" style="display:none;">
@@ -264,9 +409,9 @@
 
 <script>
 const V = {
-  uber:   { name: 'Uber Eats',    color: '#111' },
-  demae:  { name: '出前館',       color: '#e8431a' },
-  rocket: { name: 'ロケットナウ', color: '#0055ff' }
+  uber:   { name: 'Uber Eats',    color: '#16a34a' },
+  demae:  { name: '出前館',       color: '#ff2b35' },
+  rocket: { name: 'ロケットナウ', color: '#1f6fea' }
 };
 const DAYS = ['日','月','火','水','木','金','土'];
 const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ': 'rocket' };
@@ -909,7 +1054,7 @@ function render() {
   const now = new Date();
   const elapsed=(active&&activeStart)?Math.floor((now-activeStart)/1000):0;
   const todayKey = businessDayKey(now);
-  document.getElementById('date-label').textContent = businessDayLabelFromKey(todayKey) + '（4:00締め）';
+  document.getElementById('date-label').textContent = '▣  ' + businessDayLabelFromKey(todayKey) + '  4:00締め';
 
   const todayRecs=records.filter(r=>businessDayKey(r.start)===todayKey);
   const activeIsToday = active && activeStart && businessDayKey(activeStart)===todayKey;
