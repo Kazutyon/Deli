@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>フーデリ稼働記録</title>
+  <title>デリログ</title>
   <style>
 
     :root{
@@ -37,9 +37,13 @@
       box-shadow: var(--shadow);
       min-height: calc(100vh - 28px);
     }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-    .header h1 { font-size: 20px; font-weight: 800; letter-spacing: -.02em; color: #0b1220; }
-    .header-btns { display: flex; align-items:center; gap: 14px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
+    .brand { display:flex; align-items:center; gap:10px; min-width:0; }
+    .brand-mark { width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, var(--green), #16a34a); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; box-shadow: 0 8px 18px rgba(34,197,94,.18); flex-shrink:0; }
+    .brand-title { min-width:0; }
+    .header h1 { font-size: 22px; font-weight: 900; letter-spacing: .04em; color: #0b1220; line-height:1.05; }
+    .subtitle { font-size: 11px; color: #8a95a3; margin-top: 4px; letter-spacing: .02em; white-space: nowrap; }
+    .header-btns { display: flex; align-items:center; gap: 14px; flex-shrink:0; }
     .hbtn {
       background: #fff;
       border: 1px solid #e9edf1;
@@ -197,7 +201,9 @@
     #today-earnings{background:#fff;border-radius:0;padding:0;margin-bottom:14px;}
     @media (max-width:430px){
       .app{margin:8px;max-width:none;border-radius:20px;padding:17px 15px 20px;}
-      .header h1{font-size:19px;}
+      .header h1{font-size:20px;}
+      .subtitle{font-size:10px;}
+      .brand-mark{width:34px;height:34px;border-radius:11px;}
       .header-btns{gap:11px;}
       .vendors{gap:12px;}
     }
@@ -208,7 +214,10 @@
     /* ===== スマホ向けコンパクト調整 ===== */
     .app { margin: 8px auto; padding: 14px 14px 16px; border-radius: 20px; min-height: calc(100vh - 16px); }
     .header { margin-bottom: 10px; }
-    .header h1 { font-size: 18px; }
+    .header h1 { font-size: 19px; }
+    .subtitle { font-size: 10px; margin-top: 3px; }
+    .brand { gap: 8px; }
+    .brand-mark { width: 32px; height: 32px; border-radius: 10px; font-size: 16px; }
     .header-btns { gap: 9px; }
     .hbtn { width: 31px; height: 31px; }
     .hbtn.add { width: 35px; height: 35px; }
@@ -244,13 +253,19 @@
     .vtime { font-size: 11.5px; margin-top: 4px; }
     .empty { padding: 18px 10px; border-radius: 14px; font-size: 12.5px; }
     .empty::before { font-size: 19px; margin-right: 8px; }
-    @media (max-width:430px){ .app{margin:6px;max-width:none;border-radius:18px;padding:13px 13px 15px;} .header h1{font-size:18px;} .header-btns{gap:8px;} .vendors{gap:9px;} }
+    @media (max-width:430px){ .app{margin:6px;max-width:none;border-radius:18px;padding:13px 13px 15px;} .header h1{font-size:19px;} .subtitle{font-size:10px;} .brand-mark{width:31px;height:31px;border-radius:10px;font-size:15px;} .header-btns{gap:8px;} .vendors{gap:9px;} }
   </style>
 </head>
 <body>
 <div class="app">
   <div class="header">
-    <h1>フーデリ稼働記録</h1>
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">デ</div>
+      <div class="brand-title">
+        <h1>デリログ</h1>
+        <div class="subtitle">フードデリバリー稼働管理</div>
+      </div>
+    </div>
     <div class="header-btns">
       <button class="hbtn add" onclick="openModal(null)" title="追加" aria-label="追加"></button>
       <button class="hbtn mail" onclick="openMailModal()" title="メール" aria-label="メール"></button>
@@ -1016,8 +1031,8 @@ function sendMail(offset = 0) {
   const weekTotal=Object.values(byV).reduce((s,v)=>s+v,0);
   const wsKey = businessDayKey(ws);
   const weKey = businessDayKey(new Date(we.getTime() - 1));
-  const subj=encodeURIComponent('フーデリ稼働記録 '+businessDayLabelShortFromKey(wsKey)+'〜'+businessDayLabelShortFromKey(weKey));
-  let body='【稼働記録】\n'+businessDayLabelShortFromKey(wsKey)+' 〜 '+businessDayLabelShortFromKey(weKey)+'（4:00締め）\n\n【業者別合計】\n';
+  const subj=encodeURIComponent('デリログ｜稼働記録 '+businessDayLabelShortFromKey(wsKey)+'〜'+businessDayLabelShortFromKey(weKey));
+  let body='【デリログ｜稼働記録】\n'+businessDayLabelShortFromKey(wsKey)+' 〜 '+businessDayLabelShortFromKey(weKey)+'（4:00締め）\n\n【業者別合計】\n';
   Object.keys(V).forEach(v=>{if(byV[v])body+=V[v].name+': '+fmt(byV[v])+'\n';});
   body+='─────────\n合計: '+fmt(weekTotal)+' / '+cfg.weekMax+':00\n\n【日別明細】\n';
   const byDay={};
