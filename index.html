@@ -1336,11 +1336,14 @@ async function sendToSheet() {
   if (sendStatus) sendStatus.textContent = '';
 
   try {
-    const ok = await postToGAS(payload);
+    const [ok] = await Promise.all([
+      postToGAS(payload),
+      new Promise(r => setTimeout(r, 1500))
+    ]);
     if (!ok) throw new Error('送信に失敗しました');
-    sent[dayKey] = true;
+    const sentTime = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    sent[dayKey] = sentTime;
     saveLocalData();
-    if (sendStatus) sendStatus.textContent = '✅ 送信しました';
   } catch (e) {
     if (sendStatus) sendStatus.textContent = '❌ 送信に失敗しました';
   } finally {
@@ -1499,7 +1502,8 @@ function renderSalesTab() {
   if (sendBtn && sent[dayKey]) {
     sendBtn.textContent = '再送信する（上書き）';
     sendBtn.style.background = 'linear-gradient(135deg,#6b7280,#4b5563)';
-    if (sendStatus) sendStatus.textContent = '✅ 送信済み';
+    const sentLabel = typeof sent[dayKey] === 'string' ? ' ' + sent[dayKey] : '';
+    if (sendStatus) sendStatus.textContent = '✅ 送信済み' + sentLabel;
   } else if (sendBtn) {
     sendBtn.textContent = '今日の記録をシートへ送信';
     sendBtn.style.background = 'linear-gradient(135deg,#21a85b,#159447)';
