@@ -481,6 +481,8 @@
     <div id="week-vendor-summary" style="margin-bottom:1rem;"></div>
     <div class="sec-label">日別明細</div>
     <div id="week-detail"></div>
+    <div class="sec-label" style="margin-top:20px;">認定日集計（ハローワーク用）</div>
+    <div id="nintei-section"></div>
   </div>
 
   <div id="view-all" style="display:none;">
@@ -1652,6 +1654,7 @@ function render() {
       })
       .join('')||'<div class="empty">今週の記録がありません</div>';
 
+    renderNinteiSection();
   }
 
   if(currentTab==='all'){
@@ -1707,6 +1710,153 @@ function render() {
     document.getElementById('all-records').innerHTML = allHtml;
   }
   if (currentTab === 'sales') renderSalesTab();
+}
+
+// ===== 認定日集計（ハローワーク用）=====
+const NINTEI_DATES = [
+  '2026-01-06','2026-02-03','2026-03-03','2026-03-31',
+  '2026-04-28','2026-05-26','2026-06-23','2026-07-21',
+  '2026-08-18','2026-09-15','2026-10-13','2026-11-10','2026-12-08'
+];
+
+function getNinteiPeriods() {
+  const periods = [];
+  for (let i = 0; i < NINTEI_DATES.length - 1; i++) {
+    const nextDate = new Date(NINTEI_DATES[i+1] + 'T00:00:00');
+    nextDate.setDate(nextDate.getDate() - 1);
+    periods.push({ start: NINTEI_DATES[i], end: toDateInput(nextDate), reportDate: NINTEI_DATES[i+1] });
+  }
+  return periods;
+}
+
+function getCurrentNinteiIndex() {
+  const today = toDateInput(new Date());
+  const periods = getNinteiPeriods();
+  for (let i = 0; i < periods.length; i++) {
+    if (today >= periods[i].start && today <= periods[i].end) return i;
+  }
+  return periods.length - 1;
+}
+
+let ninteiPeriodIdx = null;
+
+function renderNinteiSection(newIdx) {
+  if (newIdx !== undefined) ninteiPeriodIdx = newIdx;
+  if (document.activeElement?.id === 'nintei-period-select') return;
+  const el = document.getElementById('nintei-section');
+  if (!el) return;
+  const periods = getNinteiPeriods();
+  const selIdx = ninteiPeriodIdx !== null ? ninteiPeriodIdx : getCurrentNinteiIndex();
+  const period = periods[selIdx];
+
+  const recs = records.filter(r => { const dk = businessDayKey(r.start); return dk >= period.start && dk <= period.end; });
+  const byDay = {};
+  recs.forEach(r => {
+    const dk = businessDayKey(r.start);
+    if (!byDay[dk]) byDay[dk] = { uber:0, demae:0, rocket:0 };
+    byDay[dk][r.vendor] += r.duration;
+  });
+  const sumUber   = recs.filter(r=>r.vendor==='uber').reduce((s,r)=>s+r.duration,0);
+  const sumDemae  = recs.filter(r=>r.vendor==='demae').reduce((s,r)=>s+r.duration,0);
+  const sumRocket = recs.filter(r=>r.vendor==='rocket').reduce((s,r)=>s+r.duration,0);
+  const sumTotal  = sumUber + sumDemae + sumRocket;
+  const dayKeys   = Object.keys(byDay).sort();
+
+  const dayRows = dayKeys.map(dk => {
+    const d = byDay[dk];
+    const dt = new Date(dk + 'T00:00:00');
+    const lbl = `${dt.getMonth()+1}/${dt.getDate()}(${DAYS[dt.getDay()]})`;
+    const total = d.uber + d.demae + d.rocket;
+    return `<div style="display:grid;grid-template-columns:88px repeat(4,1fr);font-size:12px;padding:5px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="font-weight:700;color:#374151;">${lbl}</span>
+      <span style="text-align:right;color:${V.uber.color};">${fmt(d.uber)}</span>
+      <span style="text-align:right;color:${V.demae.color};">${fmt(d.demae)}</span>
+      <span style="text-align:right;color:${V.rocket.color};">${fmt(d.rocket)}</span>
+      <span style="text-align:right;font-weight:800;">${fmt(total)}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="margin-bottom:10px;">
+      <select id="nintei-period-select" onchange="renderNinteiSection(parseInt(this.value))"
+        style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;background:#fff;">
+        ${periods.map((p,i) => {
+          const sd = new Date(p.start+'T00:00:00'), ed = new Date(p.end+'T00:00:00'), rd = new Date(p.reportDate+'T00:00:00');
+          const lbl = `${sd.getMonth()+1}/${sd.getDate()}〜${ed.getMonth()+1}/${ed.getDate()}（${rd.getMonth()+1}/${rd.getDate()} 報告）`;
+          return `<option value="${i}"${i===selIdx?' selected':''}>${lbl}</option>`;
+        }).join('')}
+      </select>
+    </div>
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:800;color:#0369a1;margin-bottom:8px;">業者別合計</div>
+      ${[['uber',sumUber],['demae',sumDemae],['rocket',sumRocket]].map(([v,sec]) =>
+        `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #e0f2fe;font-size:13px;">
+          <span style="display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+            ${V[v].name}
+          </span>
+          <strong>${fmt(sec)}</strong>
+        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding:7px 0 0;font-size:14px;font-weight:800;">
+        <span>合計</span><span style="color:#21a85b;">${fmt(sumTotal)}</span>
+      </div>
+    </div>
+    ${dayKeys.length > 0 ? `
+    <div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:800;color:#374151;margin-bottom:8px;">稼働日別内訳</div>
+      <div style="display:grid;grid-template-columns:88px repeat(4,1fr);font-size:11px;font-weight:700;color:#6b7280;padding:4px 0;border-bottom:2px solid #e5e7eb;">
+        <span>日付</span><span style="text-align:right;">Uber</span><span style="text-align:right;">出前館</span><span style="text-align:right;">ロケット</span><span style="text-align:right;">合計</span>
+      </div>
+      ${dayRows}
+    </div>` : '<div class="empty" style="margin-bottom:10px;">この期間の稼働記録がありません</div>'}
+    <button onclick="sendWorktimeToSheet()" id="nintei-send-btn"
+      style="width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:800;color:#fff;
+             background:linear-gradient(135deg,#1f6fea,#1558c9);cursor:pointer;">
+      稼働時間シートへ転記
+    </button>
+    <div id="nintei-send-status" style="text-align:center;font-size:12px;margin-top:6px;min-height:18px;color:#6b7280;"></div>
+  `;
+}
+
+async function sendWorktimeToSheet() {
+  const periods = getNinteiPeriods();
+  const selIdx = ninteiPeriodIdx !== null ? ninteiPeriodIdx : getCurrentNinteiIndex();
+  const period = periods[selIdx];
+
+  const recs = records.filter(r => { const dk = businessDayKey(r.start); return dk >= period.start && dk <= period.end; });
+  const byDay = {};
+  recs.forEach(r => {
+    const dk = businessDayKey(r.start);
+    if (!byDay[dk]) byDay[dk] = { uber:0, demae:0, rocket:0 };
+    byDay[dk][r.vendor] += r.duration;
+  });
+  const sumUber   = recs.filter(r=>r.vendor==='uber').reduce((s,r)=>s+r.duration,0);
+  const sumDemae  = recs.filter(r=>r.vendor==='demae').reduce((s,r)=>s+r.duration,0);
+  const sumRocket = recs.filter(r=>r.vendor==='rocket').reduce((s,r)=>s+r.duration,0);
+  const days = Object.keys(byDay).sort().map(dk => {
+    const d = byDay[dk]; const dt = new Date(dk+'T00:00:00');
+    return { date: dk, dayOfWeek: DAYS[dt.getDay()], uber:d.uber, demae:d.demae, rocket:d.rocket, total:d.uber+d.demae+d.rocket };
+  });
+  const payload = {
+    action: 'worktime',
+    periodStart: period.start, periodEnd: period.end, reportDate: period.reportDate,
+    summary: { uber:sumUber, demae:sumDemae, rocket:sumRocket, total:sumUber+sumDemae+sumRocket },
+    days
+  };
+
+  const btn = document.getElementById('nintei-send-btn');
+  const status = document.getElementById('nintei-send-status');
+  if (btn) { btn.disabled = true; btn.textContent = '転記中...'; }
+  if (status) status.textContent = '';
+  try {
+    const [ok] = await Promise.all([postToGAS(payload), new Promise(r=>setTimeout(r,1500))]);
+    if (!ok) throw new Error();
+    if (status) status.textContent = '✅ 転記しました';
+  } catch {
+    if (status) status.textContent = '❌ 転記に失敗しました';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '稼働時間シートへ転記'; }
+  }
 }
 
 loadData();
