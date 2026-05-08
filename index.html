@@ -209,12 +209,12 @@
     .modal-title { font-size: 16px; font-weight: 800; color: #111; margin-bottom: 1rem; }
     .form-row { margin-bottom: 12px; }
     .form-label { font-size: 12px; color: #667085; margin-bottom: 5px; font-weight:700; }
-    .form-row select, .form-row input, #today-earnings input {
+    .form-row select, .form-row input {
       font-size: 15px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px;
       background: white; color: #111827; outline:none;
     }
     .form-row select, .form-row input{width:100%;}
-    .form-row select:focus, .form-row input:focus, #today-earnings input:focus{border-color:#86efac; box-shadow:0 0 0 3px rgba(34,197,94,.12);}
+    .form-row select:focus, .form-row input:focus{border-color:#86efac; box-shadow:0 0 0 3px rgba(34,197,94,.12);}
     .form-btns { display: flex; gap: 8px; margin-top: 1rem; }
     .btn-cancel { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 10px; background: none; color: #667085; font-size: 13px; font-weight:700; cursor: pointer; }
     .btn-save { flex: 1; padding: 10px; border: none; border-radius: 10px; background: #22c55e; color: white; font-size: 13px; font-weight: 800; cursor: pointer; }
@@ -243,7 +243,6 @@
     .day-label { font-size: 13px; font-weight: 800; color: #667085; margin-bottom: 6px; }
     .manual-tag { font-size: 9px; background: #fef3c7; color: #d97706; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
     .gas-tag { font-size: 9px; background: #dcfce7; color: #16a34a; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
-    #today-earnings{background:#fff;border-radius:0;padding:0;margin-bottom:14px;}
     @media (max-width:430px){
       .app{margin:8px;max-width:none;border-radius:20px;padding:17px 15px 20px;}
       .header h1{font-size:20px;}
@@ -252,6 +251,36 @@
       .header-btns{gap:11px;}
       .vendors{gap:12px;}
     }
+    .bottom-tab-bar {
+      display: flex;
+      position: sticky;
+      bottom: 0;
+      background: #fff;
+      border-top: 1px solid #e9edf1;
+      padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+      z-index: 50;
+      box-shadow: 0 -4px 12px rgba(17,24,39,.06);
+    }
+    .btab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 0;
+      cursor: pointer;
+      font-size: 18px;
+      color: #6b7280;
+      transition: color .14s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btab span {
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .btab.active { color: #21a85b; }
+    .btab.active-sales { color: #f59e0b; }
 
   </style>
 
@@ -280,12 +309,6 @@
     .stat-value { font-size: 27px; line-height: 1.05; }
     .stat-sub { font-size: 11.5px; margin-top: 4px; }
     .sec-label { margin: 10px 2px 6px; font-size: 12.5px; }
-    #today-earnings { margin-bottom: 8px !important; }
-    #today-earnings .week-vendor-row { padding: 5px 0 !important; min-height: 34px; font-size: 12.5px; }
-    #today-earnings input { height: 30px; padding: 5px 8px; font-size: 14px; border-radius: 8px; }
-    #today-earnings input[style*="width:140px"] { width: 118px !important; }
-    #today-earnings input[style*="width:82px"] { width: 64px !important; }
-    #today-earnings .week-total-row { padding: 8px 0 2px !important; font-size: 14px; }
     .progress-wrap { margin: 5px 0 10px; }
     .progress-label { margin-top: 6px; font-size: 11.5px; }
     .active-card { padding: 10px 11px; margin-bottom: 10px; border-radius: 14px; }
@@ -353,14 +376,7 @@
     </div>
   </div>
 
-  <div class="tab-bar">
-    <div class="tab active" id="tab-today" onclick="switchTab('today')">今日</div>
-    <div class="tab" id="tab-week" onclick="switchTab('week')">今週</div>
-    <div class="tab" id="tab-all" onclick="switchTab('all')">全記録</div>
-  </div>
-
-  <div id="view-today">
-    <div class="date-label" id="date-label"></div>
+  <div id="view-active">
     <div class="stats">
       <div class="stat">
         <div class="stat-label">今日の稼働</div>
@@ -372,9 +388,17 @@
         <div class="stat-value" id="week-remain">20:00</div>
         <div class="stat-sub" id="week-sub">今週 0:00 使用</div>
       </div>
+      <div class="stat">
+        <div class="stat-label">今日の売上</div>
+        <div class="stat-value" id="today-sales-val" style="color:var(--blue);">¥0</div>
+        <div class="stat-sub" id="today-sales-sub">-</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">平均時給</div>
+        <div class="stat-value" id="today-hourly">-</div>
+        <div class="stat-sub">/ h</div>
+      </div>
     </div>
-  <div class="sec-label">今日の売上（4:00締め）</div>
-  <div id="today-earnings" style="margin-bottom:1rem;"></div>
     <div class="progress-wrap">
       <div class="progress-bar">
         <div class="progress-fill" id="prog-fill" style="width:0%;background:#22c55e;"></div>
@@ -403,8 +427,46 @@
         <div class="vtime" id="vt-rocket">0:00</div>
       </div>
     </div>
-    <div class="sec-label">本日の記録</div>
-    <div id="hist-today"></div>
+    <div id="today-summary" onclick="switchTab('all')"
+         style="text-align:center;font-size:12px;color:#6b7280;padding:10px;cursor:pointer;
+                background:#f9fafb;border-radius:10px;border:1px solid #edf0f3;margin-bottom:14px;">
+      今日 0件 / 計 0:00 ▸ 記録を見る
+    </div>
+  </div>
+
+  <div id="view-sales" style="display:none;">
+
+    <!-- 現金収入ログ -->
+    <div class="sec-label">
+      💴 現金収入
+      <button onclick="openCashModal()"
+        style="float:right;background:#f59e0b;color:#fff;border:none;border-radius:999px;
+               padding:4px 12px;font-size:12px;font-weight:800;cursor:pointer;">＋ 追加</button>
+    </div>
+    <div id="cash-log-area"></div>
+
+    <!-- 売上入力 -->
+    <div class="sec-label" style="margin-top:14px;">売上入力</div>
+    <div id="sales-earnings-area"></div>
+
+    <!-- 件数入力 -->
+    <div class="sec-label" style="margin-top:14px;">件数入力</div>
+    <div id="sales-counts-area"></div>
+
+    <!-- 業者別時給 -->
+    <div class="sec-label" style="margin-top:14px;">業者別時給</div>
+    <div id="sales-hourly-area"></div>
+
+    <!-- 送信ボタン -->
+    <div style="margin-top:18px;margin-bottom:80px;">
+      <button id="send-btn" onclick="sendToSheet()"
+        style="width:100%;background:linear-gradient(135deg,#21a85b,#159447);color:#fff;
+               border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:800;
+               cursor:pointer;box-shadow:0 8px 18px rgba(33,168,91,.25);">
+        今日の記録をシートへ送信
+      </button>
+      <div id="send-status" style="text-align:center;font-size:12px;color:#6b7280;margin-top:8px;"></div>
+    </div>
   </div>
 
   <div id="view-week" style="display:none;">
@@ -423,6 +485,21 @@
   <div id="view-all" style="display:none;">
     <div class="sec-label">全記録（新しい順）</div>
     <div id="all-records"></div>
+  </div>
+
+  <div class="bottom-tab-bar">
+    <div class="btab active" id="btab-active" onclick="switchTab('active')">
+      <span style="font-size:18px;">⏱</span><span>稼働</span>
+    </div>
+    <div class="btab" id="btab-sales" onclick="switchTab('sales')">
+      <span style="font-size:18px;">💴</span><span>売上</span>
+    </div>
+    <div class="btab" id="btab-week" onclick="switchTab('week')">
+      <span style="font-size:18px;">📅</span><span>今週</span>
+    </div>
+    <div class="btab" id="btab-all" onclick="switchTab('all')">
+      <span style="font-size:18px;">📋</span><span>全記録</span>
+    </div>
   </div>
 </div>
 
@@ -474,6 +551,29 @@
   </div>
 </div>
 
+<div id="cash-modal" style="display:none;">
+  <div class="modal-bg" onclick="closeCashModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title">現金収入を追加</div>
+      <div class="form-row">
+        <div class="form-label">業者</div>
+        <select id="cash-vendor">
+          <option value="uber">Uber Eats</option>
+          <option value="demae">出前館</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-label">金額（円）</div>
+        <input type="number" id="cash-amount" inputmode="numeric" min="0" placeholder="例: 500">
+      </div>
+      <div class="form-btns">
+        <button class="btn-cancel" onclick="closeCashModal()">キャンセル</button>
+        <button class="btn-save" onclick="saveCashEntry()">追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const V = {
   uber:   { name: 'Uber Eats',    color: '#16a34a' },
@@ -485,25 +585,34 @@ const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ
 const DAY_CUTOFF_HOUR = 4; // 4:00〜翌3:59 を「同じ日」として集計（Uber締め）
 
 // 正しい
-let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: 'https://script.google.com/macros/s/AKfycbxW8m3QiNOfElKdGygJ5KuflBbWUmEeittVMIHaY0qOnsBNZ7IoaEr0Clq6pfpWSFZO/exec' };
+let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: 'https://script.google.com/macros/s/AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn__DyDmLJ3lDdt6RB26VIB-xfpMfkoNDlDeor4xC/exec' };
 let active = null, activeStart = null;
 let records = [];
 let completing = false;
 let weekOffset = 0; // 0=今週, -1=先週 ...
-let currentTab = 'today';
+let currentTab = 'active';
 let editIdx = null;
 let syncStatus = 'none';
 let earnings = {}; // dayKey -> { uber:number, demae:number, rocket:{delivery:number, quest:number} }
+let cashLog = {}; // dayKey -> [{ ts: number, vendor: 'uber'|'demae', amount: number }]
+let counts  = {}; // dayKey -> { uber: number, demae: number, rocket: number }
+let sent    = {}; // dayKey -> boolean
 
 function loadData() {
   try {
     const c = localStorage.getItem('fdc_cfg');
     if (c) cfg = Object.assign(cfg, JSON.parse(c));
-    if (!cfg.gasUrl || cfg.gasUrl.indexOf('AKfycbwMH') !== -1) cfg.gasUrl = 'https://script.google.com/macros/s/AKfycbxW8m3QiNOfElKdGygJ5KuflBbWUmEeittVMIHaY0qOnsBNZ7IoaEr0Clq6pfpWSFZO/exec';
+    if (!cfg.gasUrl || cfg.gasUrl.indexOf('AKfycbwMH') !== -1) cfg.gasUrl = 'https://script.google.com/macros/s/AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn__DyDmLJ3lDdt6RB26VIB-xfpMfkoNDlDeor4xC/exec';
     const r = localStorage.getItem('fdc_records');
     if (r) records = JSON.parse(r).map(x => ({ ...x, start: new Date(x.start), end: new Date(x.end) }));
     const e = localStorage.getItem('fdc_earnings');
     if (e) earnings = JSON.parse(e) || {};
+    const cl = localStorage.getItem('fdc_cash');
+    if (cl) cashLog = JSON.parse(cl) || {};
+    const ct = localStorage.getItem('fdc_counts');
+    if (ct) counts = JSON.parse(ct) || {};
+    const st = localStorage.getItem('fdc_sent');
+    if (st) sent = JSON.parse(st) || {};
     const a = localStorage.getItem('fdc_active');
     if (a) { const ad = JSON.parse(a); active = ad.vendor; activeStart = new Date(ad.start); }
     document.getElementById('week-start').value = cfg.weekStart;
@@ -518,6 +627,9 @@ function saveLocalData() {
     localStorage.setItem('fdc_cfg', JSON.stringify(cfg));
     localStorage.setItem('fdc_records', JSON.stringify(records));
     localStorage.setItem('fdc_earnings', JSON.stringify(earnings));
+    localStorage.setItem('fdc_cash',   JSON.stringify(cashLog));
+    localStorage.setItem('fdc_counts', JSON.stringify(counts));
+    localStorage.setItem('fdc_sent',   JSON.stringify(sent));
     if (active) localStorage.setItem('fdc_active', JSON.stringify({ vendor: active, start: activeStart }));
     else localStorage.removeItem('fdc_active');
   } catch(e) {}
@@ -538,9 +650,14 @@ function toggleSettings() {
 
 function switchTab(tab) {
   currentTab = tab;
-  ['today','week','all'].forEach(t => {
-    document.getElementById('tab-'+t).className = 'tab'+(t===tab?' active':'');
-    document.getElementById('view-'+t).style.display = t===tab?'block':'none';
+  const tabs = ['active','sales','week','all'];
+  tabs.forEach(t => {
+    const btn = document.getElementById('btab-' + t);
+    if (btn) {
+      btn.className = 'btab' + (t === tab ? (t === 'sales' ? ' active-sales' : ' active') : '');
+    }
+    const view = document.getElementById('view-' + t);
+    if (view) view.style.display = t === tab ? 'block' : 'none';
   });
   render();
 }
@@ -585,6 +702,39 @@ function setEarning(dayKey, vendor, field, value) {
   }
   saveLocalData();
   render();
+}
+
+function getDayCash(dayKey) {
+  if (!cashLog[dayKey]) cashLog[dayKey] = [];
+  return cashLog[dayKey];
+}
+
+function addCashEntry(dayKey, vendor, amount) {
+  getDayCash(dayKey).push({ ts: Date.now(), vendor, amount: Math.max(0, Math.round(safeNum(amount))) });
+  saveLocalData();
+}
+
+function removeCashEntry(dayKey, idx) {
+  const list = getDayCash(dayKey);
+  if (idx >= 0 && idx < list.length) list.splice(idx, 1);
+  saveLocalData();
+}
+
+function getDayCashTotal(dayKey, vendor) {
+  return getDayCash(dayKey)
+    .filter(e => e.vendor === vendor)
+    .reduce((s, e) => s + e.amount, 0);
+}
+
+function getDayCounts(dayKey) {
+  if (!counts[dayKey]) counts[dayKey] = { uber: 0, demae: 0, rocket: 0 };
+  return counts[dayKey];
+}
+
+function getVendorWorkSeconds(dayKey, vendor) {
+  return records
+    .filter(r => businessDayKey(r.start) === dayKey && r.vendor === vendor)
+    .reduce((s, r) => s + r.duration, 0);
 }
 
 function updateSyncBar() {
@@ -860,14 +1010,31 @@ async function syncFromGAS() {
 
 async function postToGAS(payload) {
   if (!cfg.gasUrl) return false;
+  console.log('postToGAS payload:', payload);
   try {
-    await fetch(cfg.gasUrl, {
-      method: 'POST', mode: 'no-cors',
+    const res = await fetch(cfg.gasUrl, {
+      method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     });
+    const text = await res.text();
+    console.log('postToGAS response:', { ok: res.ok, status: res.status, text });
+    if (!res.ok) return false;
+    if (!text) return true;
+    try {
+      const data = JSON.parse(text);
+      if (data && data.status === 'error') {
+        console.error('GAS error response:', data);
+        return false;
+      }
+    } catch (parseError) {
+      console.warn('postToGAS response parse failed:', parseError, text);
+    }
     return true;
-  } catch(e) { return false; }
+  } catch(e) {
+    console.error('postToGAS failed:', e);
+    return false;
+  }
 }
 
 function getWeekRange(now) {
@@ -945,6 +1112,24 @@ function closeModal() {
   editIdx = null;
 }
 
+function openCashModal() {
+  document.getElementById('cash-amount').value = '';
+  document.getElementById('cash-modal').style.display = 'block';
+  setTimeout(() => document.getElementById('cash-amount').focus(), 100);
+}
+function closeCashModal() {
+  document.getElementById('cash-modal').style.display = 'none';
+}
+function saveCashEntry() {
+  const vendor = document.getElementById('cash-vendor').value;
+  const amount = parseInt(document.getElementById('cash-amount').value, 10);
+  if (!amount || amount <= 0) { alert('金額を入力してください'); return; }
+  const dayKey = businessDayKey(new Date());
+  addCashEntry(dayKey, vendor, amount);
+  closeCashModal();
+  render();
+}
+
 async function saveRecord() {
   const vendor = document.getElementById('f-vendor').value;
   const date = document.getElementById('f-date').value;
@@ -953,30 +1138,38 @@ async function saveRecord() {
   if (!date||!startT||!endT) { alert('すべての項目を入力してください'); return; }
   const start = new Date(date+'T'+startT);
   const end = new Date(date+'T'+endT);
-  if (end<=start) { alert('終了時刻は開始時刻より後にしてください'); return; }
+  if (end <= start) end.setDate(end.getDate() + 1);
   const duration = Math.floor((end-start)/1000);
+  let syncPayload = null;
+  let shouldSync = false;
 
   if (editIdx !== null) {
     const oldRec = records[editIdx];
     const clientId = oldRec.clientId || ('manual-' + Date.now() + '-' + Math.random().toString(36).slice(2));
     records[editIdx] = { ...oldRec, clientId, vendor, start, end, duration, manual: true, pending: !!cfg.gasUrl && !oldRec.id };
     if (cfg.gasUrl && oldRec.id) {
-      await postToGAS({ action:'update', id:oldRec.id, clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true });
-      setTimeout(syncFromGAS, 1500);
+      syncPayload = { action:'update', id:oldRec.id, clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true };
+      shouldSync = true;
     } else if (cfg.gasUrl) {
-      await postToGAS({ clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true });
-      setTimeout(syncFromGAS, 1500);
+      syncPayload = { clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true };
+      shouldSync = true;
     }
   } else {
     const clientId = 'manual-' + Date.now() + '-' + Math.random().toString(36).slice(2);
     records.push({ clientId, vendor, start, end, duration, manual: true, pending: !!cfg.gasUrl });
     records.sort((a,b) => a.start-b.start);
     if (cfg.gasUrl) {
-      await postToGAS({ clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true });
-      setTimeout(syncFromGAS, 1500);
+      syncPayload = { clientId, service:V[vendor].name, start:start.toISOString(), end:end.toISOString(), manual:true };
+      shouldSync = true;
     }
   }
-  saveLocalData(); closeModal(); render();
+  saveLocalData();
+  closeModal();
+  render();
+  if (shouldSync && syncPayload) {
+    await postToGAS(syncPayload);
+    setTimeout(syncFromGAS, 1500);
+  }
 }
 
 function startDel(v) {
@@ -1098,6 +1291,64 @@ function sendMail(offset = 0) {
   window.location.href='mailto:'+(cfg.mailTo||'')+'?subject='+subj+'&body='+encodeURIComponent(body);
 }
 
+async function sendToSheet() {
+  if (!cfg.gasUrl) {
+    alert('設定画面でGAS URLを入力してください');
+    return;
+  }
+  const now = new Date();
+  const dayKey = businessDayKey(now);
+
+  if (sent[dayKey]) {
+    if (!confirm('今日の記録はすでに送信済みです。上書きしますか？')) return;
+  }
+
+  const dEarn = ensureDayEarnings(dayKey);
+  const dayCounts = getDayCounts(dayKey);
+  const todayRecs = records.filter(r => businessDayKey(r.start) === dayKey);
+  const totalSec = todayRecs.reduce((s, r) => s + r.duration, 0);
+
+  const payload = {
+    action: 'earnings',
+    date: dayKey,
+    workSeconds: totalSec,
+    uber: {
+      sales: dEarn.uber || 0,
+      cash: getDayCashTotal(dayKey, 'uber'),
+      count: dayCounts.uber || 0
+    },
+    demae: {
+      sales: dEarn.demae || 0,
+      cash: getDayCashTotal(dayKey, 'demae'),
+      count: dayCounts.demae || 0
+    },
+    rocket: {
+      delivery: dEarn.rocket?.delivery || 0,
+      quest: dEarn.rocket?.quest || 0,
+      count: dayCounts.rocket || 0
+    }
+  };
+  console.log('sendToSheet payload:', payload);
+
+  const sendBtn = document.getElementById('send-btn');
+  const sendStatus = document.getElementById('send-status');
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '送信中...'; }
+  if (sendStatus) sendStatus.textContent = '';
+
+  try {
+    const ok = await postToGAS(payload);
+    if (!ok) throw new Error('送信に失敗しました');
+    sent[dayKey] = true;
+    saveLocalData();
+    if (sendStatus) sendStatus.textContent = '✅ 送信しました';
+  } catch (e) {
+    if (sendStatus) sendStatus.textContent = '❌ 送信に失敗しました';
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+    renderSalesTab();
+  }
+}
+
 function recordItem(r) {
   const idx = records.indexOf(r);
   const tags=(r.manual?'<span class="manual-tag">手動</span>':'')+(r.synced?'<span class="gas-tag">GAS</span>':'')+(r.pending?'<span class="manual-tag">送信中</span>':'');
@@ -1117,11 +1368,149 @@ function recordItem(r) {
   </div>`;
 }
 
+function renderSalesTab() {
+  const now = new Date();
+  const dayKey = businessDayKey(now);
+  const dEarn = ensureDayEarnings(dayKey);
+  const dayCounts = getDayCounts(dayKey);
+
+  // 現金ログ
+  const cashList = getDayCash(dayKey);
+  const uberCash  = getDayCashTotal(dayKey, 'uber');
+  const demaeCash = getDayCashTotal(dayKey, 'demae');
+  const cashArea = document.getElementById('cash-log-area');
+  if (cashArea) {
+    if (cashList.length === 0) {
+      cashArea.innerHTML = '<div class="empty">まだ現金収入の記録がありません</div>';
+    } else {
+      let html = '<div style="background:#fff;border:1px solid #fde68a;border-radius:12px;padding:10px;">';
+      cashList.forEach((e, i) => {
+        const t = new Date(e.ts);
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;
+                              padding:6px 0;border-bottom:1px solid #fef3c7;font-size:13px;">
+          <span>${tStr(t)} ${V[e.vendor].name}</span>
+          <span style="display:flex;align-items:center;gap:8px;">
+            <strong>¥${e.amount.toLocaleString()}</strong>
+            <button onclick="removeCashEntry('${dayKey}',${i});render();"
+              style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px;">✕</button>
+          </span>
+        </div>`;
+      });
+      html += `<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-size:12px;font-weight:800;color:#92400e;">
+        <span>合計：Uber ¥${uberCash.toLocaleString()} / 出前館 ¥${demaeCash.toLocaleString()}</span>
+      </div></div>`;
+      cashArea.innerHTML = html;
+    }
+  }
+
+  // 売上入力
+  const earningsArea = document.getElementById('sales-earnings-area');
+  if (earningsArea && !document.activeElement?.closest('#sales-earnings-area')) {
+    earningsArea.innerHTML = `
+      <div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;">
+        <div class="week-vendor-row" style="gap:10px;align-items:center;">
+          <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${V.uber.color};display:inline-block;"></span>
+            Uber Eats
+          </span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*"
+            style="width:120px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+            value="${moneyInputValue(dEarn.uber)}" onfocus="this.select()"
+            oninput="setEarning('${dayKey}','uber',null,this.value)">
+          <span style="color:#888;font-size:11px;">円</span>
+        </div>
+        <div class="week-vendor-row" style="gap:10px;align-items:center;margin-top:6px;">
+          <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${V.demae.color};display:inline-block;"></span>
+            出前館
+          </span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*"
+            style="width:120px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+            value="${moneyInputValue(dEarn.demae)}" onfocus="this.select()"
+            oninput="setEarning('${dayKey}','demae',null,this.value)">
+          <span style="color:#888;font-size:11px;">円</span>
+        </div>
+        <div class="week-vendor-row" style="gap:10px;align-items:center;margin-top:6px;">
+          <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${V.rocket.color};display:inline-block;"></span>
+            ロケット
+          </span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <input type="text" inputmode="numeric" pattern="[0-9]*"
+              style="width:72px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+              value="${moneyInputValue(dEarn.rocket?.delivery)}" onfocus="this.select()"
+              oninput="setEarning('${dayKey}','rocket','delivery',this.value)">
+            <span style="color:#888;font-size:10px;">配達</span>
+            <input type="text" inputmode="numeric" pattern="[0-9]*"
+              style="width:72px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+              value="${moneyInputValue(dEarn.rocket?.quest)}" onfocus="this.select()"
+              oninput="setEarning('${dayKey}','rocket','quest',this.value)">
+            <span style="color:#888;font-size:10px;">クエ</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // 件数入力
+  const countsArea = document.getElementById('sales-counts-area');
+  if (countsArea && !document.activeElement?.closest('#sales-counts-area')) {
+    countsArea.innerHTML = `
+      <div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;">
+        ${['uber','demae','rocket'].map(v => `
+          <div style="display:flex;justify-content:space-between;align-items:center;
+                      padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+            <span style="display:flex;align-items:center;gap:6px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+              ${V[v].name}
+            </span>
+            <input type="number" min="0" value="${dayCounts[v] || 0}"
+              style="width:60px;text-align:right;padding:5px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+              onfocus="this.select()"
+              oninput="getDayCounts('${dayKey}')['${v}']=parseInt(this.value)||0;saveLocalData();">
+          </div>`).join('')}
+      </div>`;
+  }
+
+  // 業者別時給
+  const hourlyArea = document.getElementById('sales-hourly-area');
+  if (hourlyArea) {
+    const rows = Object.keys(V).map(v => {
+      const sec = getVendorWorkSeconds(dayKey, v);
+      const sale = v === 'rocket'
+        ? (dEarn.rocket?.delivery || 0) + (dEarn.rocket?.quest || 0)
+        : (dEarn[v] || 0);
+      const h = sec > 0 ? Math.round(sale / (sec / 3600)) : null;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;
+                           padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+        <span style="display:flex;align-items:center;gap:6px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+          ${V[v].name}
+          <span style="font-size:10px;color:#6b7280;">(${fmt(sec)})</span>
+        </span>
+        <strong style="color:#111;">${h !== null ? money(h) + '/h' : '-'}</strong>
+      </div>`;
+    }).join('');
+    hourlyArea.innerHTML = `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px;">${rows}</div>`;
+  }
+
+  // 送信済みフラグの反映
+  const sendBtn = document.getElementById('send-btn');
+  const sendStatus = document.getElementById('send-status');
+  if (sendBtn && sent[dayKey]) {
+    sendBtn.textContent = '再送信する（上書き）';
+    sendBtn.style.background = 'linear-gradient(135deg,#6b7280,#4b5563)';
+    if (sendStatus) sendStatus.textContent = '✅ 送信済み';
+  } else if (sendBtn) {
+    sendBtn.textContent = '今日の記録をシートへ送信';
+    sendBtn.style.background = 'linear-gradient(135deg,#21a85b,#159447)';
+    if (sendStatus) sendStatus.textContent = '';
+  }
+}
+
 function render() {
   const now = new Date();
   const elapsed=(active&&activeStart)?Math.floor((now-activeStart)/1000):0;
   const todayKey = businessDayKey(now);
-  document.getElementById('date-label').textContent = '▣  ' + businessDayLabelFromKey(todayKey) + '  4:00締め';
 
   const todayRecs=records.filter(r=>businessDayKey(r.start)===todayKey);
   const activeIsToday = active && activeStart && businessDayKey(activeStart)===todayKey;
@@ -1134,62 +1523,29 @@ function render() {
   document.getElementById('today-sub').textContent=parts.join(' / ')||'-';
   Object.keys(V).forEach(v=>{document.getElementById('vt-'+v).textContent=fmt(byV[v]||0);});
 
-  // 今日タブの売上入力欄（4:00締め）
+  // 今日の売上合計・時給・サマリー
   const dEarn = ensureDayEarnings(todayKey);
-  const uberY = dEarn.uber || 0;
-  const demaeY = dEarn.demae || 0;
-  const rocketDel = dEarn.rocket?.delivery || 0;
-  const rocketQuest = dEarn.rocket?.quest || 0;
-  const todayEarnTotal = uberY + demaeY + rocketDel + rocketQuest;
-  const hourly = todaySec > 0 ? Math.round(todayEarnTotal / (todaySec / 3600)) : 0;
-  if (!document.activeElement || !document.activeElement.closest('#today-earnings')) {
-  document.getElementById('today-earnings').innerHTML = `
-    <div class="week-vendor-row" style="gap:10px;align-items:center;">
-      <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:${V.uber.color};display:inline-block;"></span>
-        <span>${V.uber.name}</span>
-      </span>
-      <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:140px;text-align:right;"
-        value="${moneyInputValue(uberY)}"
-        onfocus="this.select()"
-        oninput="setEarning('${todayKey}','uber',null,this.value)">
-      <span style="color:#888;font-size:11px;">円</span>
-    </div>
-    <div class="week-vendor-row" style="gap:10px;align-items:center;">
-      <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:${V.demae.color};display:inline-block;"></span>
-        <span>${V.demae.name}</span>
-      </span>
-      <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:140px;text-align:right;"
-        value="${moneyInputValue(demaeY)}"
-        onfocus="this.select()"
-        oninput="setEarning('${todayKey}','demae',null,this.value)">
-      <span style="color:#888;font-size:11px;">円</span>
-    </div>
-    <div class="week-vendor-row" style="gap:10px;align-items:center;">
-      <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:${V.rocket.color};display:inline-block;"></span>
-        <span>${V.rocket.name}</span>
-      </span>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:82px;text-align:right;"
-          value="${moneyInputValue(rocketDel)}"
-          onfocus="this.select()"
-          oninput="setEarning('${todayKey}','rocket','delivery',this.value)">
-        <span style="color:#888;font-size:10px;">配達</span>
-        <input type="text" inputmode="numeric" pattern="[0-9]*" style="width:82px;text-align:right;"
-          value="${moneyInputValue(rocketQuest)}"
-          onfocus="this.select()"
-          oninput="setEarning('${todayKey}','rocket','quest',this.value)">
-        <span style="color:#888;font-size:10px;">クエ</span>
-      </div>
-    </div>
-    <div class="week-total-row" style="border-top:1px solid #eee;">
-      <span>合計売上 / 時給</span>
-      <span>${money(todayEarnTotal)} / ${todaySec>0?money(hourly)+'/h':'-'}</span>
-    </div>
-  `;
-  } // end focus guard
+  const todaySalesTotal = (dEarn.uber || 0) + (dEarn.demae || 0)
+    + (dEarn.rocket?.delivery || 0) + (dEarn.rocket?.quest || 0);
+  const el_sales = document.getElementById('today-sales-val');
+  const el_salesSub = document.getElementById('today-sales-sub');
+  if (el_sales) el_sales.textContent = money(todaySalesTotal);
+  if (el_salesSub) {
+    const salesParts = [];
+    if (dEarn.uber) salesParts.push('U:' + money(dEarn.uber));
+    if (dEarn.demae) salesParts.push('出:' + money(dEarn.demae));
+    const rTotal = (dEarn.rocket?.delivery || 0) + (dEarn.rocket?.quest || 0);
+    if (rTotal) salesParts.push('R:' + money(rTotal));
+    el_salesSub.textContent = salesParts.join(' / ') || '-';
+  }
+  const el_hourly = document.getElementById('today-hourly');
+  if (el_hourly) {
+    el_hourly.textContent = todaySec > 0 ? money(Math.round(todaySalesTotal / (todaySec / 3600))) : '-';
+  }
+  const el_summary = document.getElementById('today-summary');
+  if (el_summary) {
+    el_summary.textContent = '今日 ' + todayRecs.length + '件 / 計 ' + fmt(todaySec) + ' ▸ 記録を見る';
+  }
 
   const {start:ws,end:we}=getWeekRange(now);
   const weekRecs=records.filter(r=>r.start>=ws&&r.start<=we);
@@ -1237,9 +1593,6 @@ function render() {
     else el.classList.remove('disabled');
   });
 
-  const ht=document.getElementById('hist-today');
-  ht.innerHTML=todayRecs.length===0?'<div class="empty">まだ記録がありません</div>':
-    [...todayRecs].reverse().map(r=>recordItem(r)).join('');
 
   if(currentTab==='week'){
     const wByV={};
@@ -1297,20 +1650,33 @@ function render() {
   }
 
   if(currentTab==='all'){
-    const byDay={};
-    records.forEach(r=>{
-      const dk=businessDayKey(r.start);
-      if(!byDay[dk])byDay[dk]={key:dk,items:[]};
+    const allDayKey = businessDayKey(now);
+    const todayRecsAll = records.filter(r => businessDayKey(r.start) === allDayKey);
+    let allHtml = '';
+
+    if (todayRecsAll.length > 0) {
+      allHtml += `<div style="font-size:12px;font-weight:800;color:#21a85b;
+                               margin-bottom:6px;padding:2px 4px;">📅 今日の記録</div>`;
+      allHtml += todayRecsAll.slice().reverse().map(r => recordItem(r)).join('');
+      allHtml += `<div style="height:1px;background:#edf0f3;margin:12px 0;"></div>`;
+    }
+
+    const byDay = {};
+    records.forEach(r => {
+      const dk = businessDayKey(r.start);
+      if (dk === allDayKey) return;
+      if (!byDay[dk]) byDay[dk] = { key: dk, items: [] };
       byDay[dk].items.push(r);
     });
-    document.getElementById('all-records').innerHTML=Object.values(byDay)
-      .sort((a,b)=> (a.key<b.key?1:-1))
-      .map(day=> {
+
+    const pastHtml = Object.values(byDay)
+      .sort((a, b) => (a.key < b.key ? 1 : -1))
+      .map(day => {
         const dk = day.key;
         const dayByV = {};
-        day.items.forEach(r => { dayByV[r.vendor] = (dayByV[r.vendor]||0) + r.duration; });
-        const daySec = Object.values(dayByV).reduce((s,v)=>s+v, 0);
-        const vtRows = Object.keys(V).filter(v=>dayByV[v]).map(v=>
+        day.items.forEach(r => { dayByV[r.vendor] = (dayByV[r.vendor] || 0) + r.duration; });
+        const daySec = Object.values(dayByV).reduce((s, v) => s + v, 0);
+        const vtRows = Object.keys(V).filter(v => dayByV[v]).map(v =>
           `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0;">
             <span style="display:flex;align-items:center;gap:6px;font-size:12px;">
               <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
@@ -1321,7 +1687,7 @@ function render() {
         ).join('');
         return `<div class="day-group">
           <div class="day-label">${businessDayLabelShortFromKey(dk)}</div>
-          ${day.items.map(r=>recordItem(r)).join('')}
+          ${day.items.map(r => recordItem(r)).join('')}
           <div style="margin-top:8px;padding:8px 10px;background:#f9f9f9;border-radius:8px;border:1px solid #eee;">
             ${vtRows}
             <div style="display:flex;justify-content:space-between;padding:5px 0 0;font-size:12px;font-weight:600;color:#111;">
@@ -1330,9 +1696,12 @@ function render() {
             </div>
           </div>
         </div>`;
-      })
-      .join('')||'<div class="empty">記録がありません</div>';
+      }).join('');
+
+    allHtml += pastHtml || (todayRecsAll.length === 0 ? '<div class="empty">記録がありません</div>' : '');
+    document.getElementById('all-records').innerHTML = allHtml;
   }
+  if (currentTab === 'sales') renderSalesTab();
 }
 
 loadData();
