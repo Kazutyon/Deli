@@ -153,7 +153,7 @@
     .stat-value { font-size: 30px; font-weight: 800; color: #111827; letter-spacing:-.02em; }
     .stat:first-child .stat-value{color:var(--green);}
     .stat-sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
-    .progress-wrap { margin: 8px 0 20px; }
+    .progress-wrap { margin: 8px 0 12px; }
     .progress-bar { height: 4px; background: #d7dadd; border-radius: 999px; overflow: hidden; }
     .progress-fill { height: 100%; border-radius: 999px; transition: width 0.3s, background 0.3s; }
     .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: #4b5563; margin-top: 10px; }
@@ -239,8 +239,53 @@
       display: flex; justify-content: space-between; padding: 12px 0 4px; font-size: 15px; font-weight: 800; color: #111; border-top: 1px solid #e5e7eb; margin-top: 4px;
     }
     .week-total-row span:last-child{color:#159447;}
-    .day-group { margin-bottom: 14px; }
-    .day-label { font-size: 13px; font-weight: 800; color: #667085; margin-bottom: 6px; }
+    .day-group { margin-bottom: 12px; }
+    .day-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid #e5e9ed;
+      border-radius: 14px;
+      background: #fff;
+      cursor: pointer;
+      box-shadow: 0 8px 18px rgba(17,24,39,.04);
+    }
+    .day-toggle-left { display:flex; align-items:center; gap:10px; min-width:0; }
+    .day-toggle-badge {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      background: #eefaf2;
+      color: var(--green);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 14px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .day-label { font-size: 13px; font-weight: 800; color: #111827; margin-bottom: 2px; }
+    .day-meta { font-size: 11px; color: #6b7280; }
+    .day-chevron { font-size: 14px; color: #6b7280; transition: transform .14s ease; }
+    .day-toggle.open .day-chevron { transform: rotate(180deg); }
+    .day-panel {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px solid #edf0f3;
+      border-radius: 14px;
+      background: #fbfcfc;
+    }
+    .day-panel.collapsed { display: none; }
+    .day-summary-box {
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: #f9f9f9;
+      border-radius: 10px;
+      border: 1px solid #eee;
+    }
     .manual-tag { font-size: 9px; background: #fef3c7; color: #d97706; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
     .gas-tag { font-size: 9px; background: #dcfce7; color: #16a34a; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
     @media (max-width:430px){
@@ -398,15 +443,6 @@
         <div class="stat-label">平均時給</div>
         <div class="stat-value" id="today-hourly">-</div>
         <div class="stat-sub">/ h</div>
-      </div>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-bar">
-        <div class="progress-fill" id="prog-fill" style="width:0%;background:#22c55e;"></div>
-      </div>
-      <div class="progress-label">
-        <span id="week-range-label"></span>
-        <span id="prog-pct">0%</span>
       </div>
     </div>
     <div id="active-area"></div>
@@ -586,9 +622,9 @@ const V = {
 const DAYS = ['日','月','火','水','木','金','土'];
 const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ': 'rocket' };
 const DAY_CUTOFF_HOUR = 4; // 4:00〜翌3:59 を「同じ日」として集計（Uber締め）
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn__DyDmLJ3lDdt6RB26VIB-xfpMfkoNDlDeor4xC/exec';
 
-// 正しい
-let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: 'https://script.google.com/macros/s/AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn__DyDmLJ3lDdt6RB26VIB-xfpMfkoNDlDeor4xC/exec' };
+let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: GAS_URL };
 let active = null, activeStart = null;
 let records = [];
 let completing = false;
@@ -596,28 +632,35 @@ let weekOffset = 0; // 0=今週, -1=先週 ...
 let currentTab = 'active';
 let editIdx = null;
 let syncStatus = 'none';
-let earnings = {}; // dayKey -> { uber:number, demae:number, rocket:{delivery:number, quest:number} }
-let cashLog = {}; // dayKey -> [{ ts: number, vendor: 'uber'|'demae', amount: number }]
-let counts  = {}; // dayKey -> { uber: number, demae: number, rocket: number }
-let sent    = {}; // dayKey -> boolean
+let earnings = {}; // dayKey -> { uber:number, demae:number, rocket:{delivery:number, quest:number}, cashLog:[], counts:{}, sentAt:string|false }
+let collapsedDays = {};
 
 function loadData() {
   try {
     const c = localStorage.getItem('fdc_cfg');
     if (c) cfg = Object.assign(cfg, JSON.parse(c));
-    if (!cfg.gasUrl || cfg.gasUrl.indexOf('AKfycbwMH') !== -1) cfg.gasUrl = 'https://script.google.com/macros/s/AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn__DyDmLJ3lDdt6RB26VIB-xfpMfkoNDlDeor4xC/exec';
+    if (!cfg.gasUrl || cfg.gasUrl.indexOf('AKfycbwMH') !== -1) cfg.gasUrl = GAS_URL;
     const r = localStorage.getItem('fdc_records');
     if (r) records = JSON.parse(r).map(x => ({ ...x, start: new Date(x.start), end: new Date(x.end) }));
     const e = localStorage.getItem('fdc_earnings');
     if (e) earnings = JSON.parse(e) || {};
-    const cl = localStorage.getItem('fdc_cash');
-    if (cl) cashLog = JSON.parse(cl) || {};
-    const ct = localStorage.getItem('fdc_counts');
-    if (ct) counts = JSON.parse(ct) || {};
-    const st = localStorage.getItem('fdc_sent');
-    if (st) sent = JSON.parse(st) || {};
+    const legacyCash = JSON.parse(localStorage.getItem('fdc_cash') || '{}');
+    const legacyCounts = JSON.parse(localStorage.getItem('fdc_counts') || '{}');
+    const legacySent = JSON.parse(localStorage.getItem('fdc_sent') || '{}');
     const a = localStorage.getItem('fdc_active');
     if (a) { const ad = JSON.parse(a); active = ad.vendor; activeStart = new Date(ad.start); }
+    const dayKeys = new Set([
+      ...Object.keys(earnings || {}),
+      ...Object.keys(legacyCash || {}),
+      ...Object.keys(legacyCounts || {}),
+      ...Object.keys(legacySent || {})
+    ]);
+    dayKeys.forEach(dayKey => {
+      const day = ensureDayEarnings(dayKey);
+      if (!Array.isArray(day.cashLog) && Array.isArray(legacyCash[dayKey])) day.cashLog = legacyCash[dayKey];
+      if (!day.counts && legacyCounts[dayKey]) day.counts = legacyCounts[dayKey];
+      if ((typeof day.sentAt === 'undefined' || day.sentAt === null) && legacySent[dayKey]) day.sentAt = legacySent[dayKey];
+    });
     document.getElementById('week-start').value = cfg.weekStart;
     document.getElementById('week-max').value = cfg.weekMax;
     document.getElementById('mail-to').value = cfg.mailTo || '';
@@ -630,9 +673,9 @@ function saveLocalData() {
     localStorage.setItem('fdc_cfg', JSON.stringify(cfg));
     localStorage.setItem('fdc_records', JSON.stringify(records));
     localStorage.setItem('fdc_earnings', JSON.stringify(earnings));
-    localStorage.setItem('fdc_cash',   JSON.stringify(cashLog));
-    localStorage.setItem('fdc_counts', JSON.stringify(counts));
-    localStorage.setItem('fdc_sent',   JSON.stringify(sent));
+    localStorage.removeItem('fdc_cash');
+    localStorage.removeItem('fdc_counts');
+    localStorage.removeItem('fdc_sent');
     if (active) localStorage.setItem('fdc_active', JSON.stringify({ vendor: active, start: activeStart }));
     else localStorage.removeItem('fdc_active');
   } catch(e) {}
@@ -693,6 +736,12 @@ function ensureDayEarnings(dayKey) {
   if (!earnings[dayKey].rocket || typeof earnings[dayKey].rocket !== 'object') earnings[dayKey].rocket = {};
   if (typeof earnings[dayKey].rocket.delivery !== 'number') earnings[dayKey].rocket.delivery = 0;
   if (typeof earnings[dayKey].rocket.quest !== 'number') earnings[dayKey].rocket.quest = 0;
+  if (!Array.isArray(earnings[dayKey].cashLog)) earnings[dayKey].cashLog = [];
+  if (!earnings[dayKey].counts || typeof earnings[dayKey].counts !== 'object') earnings[dayKey].counts = { uber: 0, demae: 0, rocket: 0 };
+  if (typeof earnings[dayKey].counts.uber !== 'number') earnings[dayKey].counts.uber = 0;
+  if (typeof earnings[dayKey].counts.demae !== 'number') earnings[dayKey].counts.demae = 0;
+  if (typeof earnings[dayKey].counts.rocket !== 'number') earnings[dayKey].counts.rocket = 0;
+  if (typeof earnings[dayKey].sentAt === 'undefined') earnings[dayKey].sentAt = false;
   return earnings[dayKey];
 }
 function setEarning(dayKey, vendor, field, value) {
@@ -708,8 +757,7 @@ function setEarning(dayKey, vendor, field, value) {
 }
 
 function getDayCash(dayKey) {
-  if (!cashLog[dayKey]) cashLog[dayKey] = [];
-  return cashLog[dayKey];
+  return ensureDayEarnings(dayKey).cashLog;
 }
 
 function addCashEntry(dayKey, vendor, amount) {
@@ -730,8 +778,70 @@ function getDayCashTotal(dayKey, vendor) {
 }
 
 function getDayCounts(dayKey) {
-  if (!counts[dayKey]) counts[dayKey] = { uber: 0, demae: 0, rocket: 0 };
-  return counts[dayKey];
+  return ensureDayEarnings(dayKey).counts;
+}
+
+function getDaySentAt(dayKey) {
+  return ensureDayEarnings(dayKey).sentAt || false;
+}
+
+function setDaySentAt(dayKey, value) {
+  ensureDayEarnings(dayKey).sentAt = value || false;
+  saveLocalData();
+}
+
+function toggleDayGroup(dayKey) {
+  collapsedDays[dayKey] = !collapsedDays[dayKey];
+  render();
+}
+
+function buildDaySummaryRows(dayByV, dayKey) {
+  const daySec = Object.values(dayByV).reduce((s, v) => s + v, 0);
+  const vtRows = Object.keys(V).filter(v => dayByV[v]).map(v =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="display:flex;align-items:center;gap:6px;font-size:12px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+        ${V[v].name}
+      </span>
+      <span style="font-size:13px;font-weight:600;color:#111;">${fmt(dayByV[v])}</span>
+    </div>`
+  ).join('');
+  return `<div class="day-summary-box">
+    ${vtRows}
+    <div style="display:flex;justify-content:space-between;padding:5px 0 0;font-size:12px;font-weight:600;color:#111;">
+      <span>${businessDayLabelShortFromKey(dayKey)} 合計</span>
+      <span>${fmt(daySec)}</span>
+    </div>
+  </div>`;
+}
+
+function buildDayGroup(day, options = {}) {
+  const { collapsible = false, forceOpen = false } = options;
+  const dk = day.key;
+  const dayByV = {};
+  day.items.forEach(r => { dayByV[r.vendor] = (dayByV[r.vendor] || 0) + r.duration; });
+  const daySec = Object.values(dayByV).reduce((s, v) => s + v, 0);
+  const isOpen = forceOpen || !collapsible || !collapsedDays[dk];
+  const summary = buildDaySummaryRows(dayByV, dk);
+  const header = collapsible
+    ? `<button class="day-toggle ${isOpen ? 'open' : ''}" onclick="toggleDayGroup('${dk}')">
+        <span class="day-toggle-left">
+          <span class="day-toggle-badge">${day.items.length}</span>
+          <span>
+            <span class="day-label">${businessDayLabelShortFromKey(dk)}</span>
+            <span class="day-meta">${fmt(daySec)} / ${Object.keys(dayByV).length}業者</span>
+          </span>
+        </span>
+        <span class="day-chevron">▾</span>
+      </button>`
+    : `<div class="day-label">${businessDayLabelShortFromKey(dk)}</div>`;
+  return `<div class="day-group">
+    ${header}
+    <div class="day-panel ${isOpen ? '' : 'collapsed'}">
+      ${day.items.map(r => recordItem(r)).join('')}
+      ${summary}
+    </div>
+  </div>`;
 }
 
 function getVendorWorkSeconds(dayKey, vendor) {
@@ -1302,7 +1412,7 @@ async function sendToSheet() {
   const now = new Date();
   const dayKey = businessDayKey(now);
 
-  if (sent[dayKey]) {
+  if (getDaySentAt(dayKey)) {
     if (!confirm('今日の記録はすでに送信済みです。上書きしますか？')) return;
   }
 
@@ -1310,11 +1420,17 @@ async function sendToSheet() {
   const dayCounts = getDayCounts(dayKey);
   const todayRecs = records.filter(r => businessDayKey(r.start) === dayKey);
   const totalSec = todayRecs.reduce((s, r) => s + r.duration, 0);
+  const uberSec   = todayRecs.filter(r => r.vendor === 'uber').reduce((s, r) => s + r.duration, 0);
+  const demaeSec  = todayRecs.filter(r => r.vendor === 'demae').reduce((s, r) => s + r.duration, 0);
+  const rocketSec = todayRecs.filter(r => r.vendor === 'rocket').reduce((s, r) => s + r.duration, 0);
 
   const payload = {
     action: 'earnings',
     date: dayKey,
     workSeconds: totalSec,
+    uberWorkSeconds: uberSec,
+    demaeWorkSeconds: demaeSec,
+    rocketWorkSeconds: rocketSec,
     uber: {
       sales: dEarn.uber || 0,
       cash: getDayCashTotal(dayKey, 'uber'),
@@ -1345,8 +1461,7 @@ async function sendToSheet() {
     ]);
     if (!ok) throw new Error('送信に失敗しました');
     const sentTime = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-    sent[dayKey] = sentTime;
-    saveLocalData();
+    setDaySentAt(dayKey, sentTime);
   } catch (e) {
     if (sendStatus) sendStatus.textContent = '❌ 送信に失敗しました';
   } finally {
@@ -1502,10 +1617,11 @@ function renderSalesTab() {
   // 送信済みフラグの反映
   const sendBtn = document.getElementById('send-btn');
   const sendStatus = document.getElementById('send-status');
-  if (sendBtn && sent[dayKey]) {
+  const sentAt = getDaySentAt(dayKey);
+  if (sendBtn && sentAt) {
     sendBtn.textContent = '再送信する（上書き）';
     sendBtn.style.background = 'linear-gradient(135deg,#6b7280,#4b5563)';
-    const sentLabel = typeof sent[dayKey] === 'string' ? ' ' + sent[dayKey] : '';
+    const sentLabel = typeof sentAt === 'string' ? ' ' + sentAt : '';
     if (sendStatus) sendStatus.textContent = '✅ 送信済み' + sentLabel;
   } else if (sendBtn) {
     sendBtn.textContent = '今日の記録をシートへ送信';
@@ -1560,13 +1676,9 @@ function render() {
   const maxSec=cfg.weekMax*3600;
   document.getElementById('week-remain').textContent=fmt(Math.max(0,maxSec-weekSec));
   document.getElementById('week-sub').textContent='今週 '+fmt(weekSec)+' / '+cfg.weekMax+'h使用';
-  const pct=Math.min(100,Math.round(weekSec/maxSec*100));
-  const fill=document.getElementById('prog-fill');
-  fill.style.width=pct+'%';
-  fill.style.background=pct>90?'#ef4444':pct>70?'#f59e0b':'#22c55e';
-  document.getElementById('prog-pct').textContent=pct+'%';
   const wrl=dateStr(ws)+' 〜 '+dateStr(we);
-  document.getElementById('week-range-label').textContent=wrl;
+  const weekRangeLabel = document.getElementById('week-range-label');
+  if (weekRangeLabel) weekRangeLabel.textContent=wrl;
   const { start:ws2, end:we2 } = getWeekRangeWithOffset(now, weekOffset);
   const wrl2=dateStr(ws2)+' 〜 '+dateStr(we2);
   let weekSuffix = '';
@@ -1623,35 +1735,7 @@ function render() {
     });
     document.getElementById('week-detail').innerHTML=Object.values(byDay)
       .sort((a,b)=> (a.key<b.key?1:-1))
-      .map(day=> {
-        const dk = day.key;
-        const de = ensureDayEarnings(dk);
-        const dayByV = {};
-        day.items.forEach(r => { dayByV[r.vendor] = (dayByV[r.vendor]||0) + r.duration; });
-        const daySec = Object.values(dayByV).reduce((s,v)=>s+v, 0);
-        const uY = de.uber||0, dY = de.demae||0, rDel = de.rocket?.delivery||0, rQst = de.rocket?.quest||0;
-        const dayEarn = uY + dY + rDel + rQst;
-        const dayHourly = daySec > 0 ? Math.round(dayEarn / (daySec/3600)) : 0;
-        const vtRows = Object.keys(V).filter(v=>dayByV[v]).map(v=>
-          `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0;">
-            <span style="display:flex;align-items:center;gap:6px;font-size:12px;">
-              <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
-              ${V[v].name}
-            </span>
-            <span style="font-size:13px;font-weight:600;color:#111;">${fmt(dayByV[v])}</span>
-          </div>`
-        ).join('');
-        return `<div class="day-group">
-          <div class="day-label">${businessDayLabelShortFromKey(dk)}</div>
-          <div style="padding:8px 10px;background:#f9f9f9;border-radius:8px;border:1px solid #eee;">
-            ${vtRows}
-            <div style="display:flex;justify-content:space-between;padding:5px 0 0;font-size:12px;font-weight:600;color:#111;">
-              <span>${businessDayLabelShortFromKey(dk)} 合計</span>
-              <span>${fmt(daySec)}</span>
-            </div>
-          </div>
-        </div>`;
-      })
+      .map(day => buildDayGroup(day))
       .join('')||'<div class="empty">今週の記録がありません</div>';
 
     renderNinteiSection();
@@ -1681,29 +1765,7 @@ function render() {
       .sort((a, b) => (a.key < b.key ? 1 : -1))
       .map(day => {
         const dk = day.key;
-        const dayByV = {};
-        day.items.forEach(r => { dayByV[r.vendor] = (dayByV[r.vendor] || 0) + r.duration; });
-        const daySec = Object.values(dayByV).reduce((s, v) => s + v, 0);
-        const vtRows = Object.keys(V).filter(v => dayByV[v]).map(v =>
-          `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0;">
-            <span style="display:flex;align-items:center;gap:6px;font-size:12px;">
-              <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
-              ${V[v].name}
-            </span>
-            <span style="font-size:13px;font-weight:600;color:#111;">${fmt(dayByV[v])}</span>
-          </div>`
-        ).join('');
-        return `<div class="day-group">
-          <div class="day-label">${businessDayLabelShortFromKey(dk)}</div>
-          ${day.items.map(r => recordItem(r)).join('')}
-          <div style="margin-top:8px;padding:8px 10px;background:#f9f9f9;border-radius:8px;border:1px solid #eee;">
-            ${vtRows}
-            <div style="display:flex;justify-content:space-between;padding:5px 0 0;font-size:12px;font-weight:600;color:#111;">
-              <span>${businessDayLabelShortFromKey(dk)} 合計</span>
-              <span>${fmt(daySec)}</span>
-            </div>
-          </div>
-        </div>`;
+        return buildDayGroup(day, { collapsible: true });
       }).join('');
 
     allHtml += pastHtml || (todayRecsAll.length === 0 ? '<div class="empty">記録がありません</div>' : '');
