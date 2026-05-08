@@ -255,11 +255,12 @@
       display: flex;
       position: sticky;
       bottom: 0;
-      background: #fff;
-      border-top: 1px solid #e9edf1;
+      background: rgba(255,255,255,.96);
+      border-top: 1px solid #e5e7eb;
+      border-radius: 18px 18px 0 0;
       padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
       z-index: 50;
-      box-shadow: 0 -4px 12px rgba(17,24,39,.06);
+      box-shadow: 0 -8px 22px rgba(17,24,39,.08);
     }
     .btab {
       flex: 1;
@@ -286,7 +287,7 @@
 
   <style>
     /* ===== スマホ向けコンパクト調整 ===== */
-    .app { margin: 8px auto; padding: 14px 14px 16px; border-radius: 20px; min-height: calc(100vh - 16px); }
+    .app { margin: 8px auto; padding: 14px 14px 0; border-radius: 20px; min-height: auto; }
     .header { margin-bottom: 10px; }
     .header h1 { font-size: 19px; }
     .subtitle { font-size: 10px; margin-top: 3px; }
@@ -321,7 +322,7 @@
     .vtime { font-size: 11.5px; margin-top: 4px; }
     .empty { padding: 18px 10px; border-radius: 14px; font-size: 12.5px; }
     .empty::before { font-size: 19px; margin-right: 8px; }
-    @media (max-width:430px){ .app{margin:6px;max-width:none;border-radius:18px;padding:13px 13px 15px;} .header h1{font-size:19px;} .subtitle{font-size:10px;} .brand-mark{width:31px;height:31px;border-radius:10px;font-size:15px;} .header-btns{gap:8px;} .vendors{gap:9px;} }
+    @media (max-width:430px){ .app{margin:6px;max-width:none;border-radius:18px;padding:13px 13px 0;} .header h1{font-size:19px;} .subtitle{font-size:10px;} .brand-mark{width:31px;height:31px;border-radius:10px;font-size:15px;} .header-btns{gap:8px;} .vendors{gap:9px;} }
   </style>
 </head>
 <body>
