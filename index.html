@@ -1756,11 +1756,14 @@ function renderNinteiSection(newIdx) {
     if (!byDay[dk]) byDay[dk] = { uber:0, demae:0, rocket:0 };
     byDay[dk][r.vendor] += r.duration;
   });
-  const sumUber   = recs.filter(r=>r.vendor==='uber').reduce((s,r)=>s+r.duration,0);
-  const sumDemae  = recs.filter(r=>r.vendor==='demae').reduce((s,r)=>s+r.duration,0);
-  const sumRocket = recs.filter(r=>r.vendor==='rocket').reduce((s,r)=>s+r.duration,0);
-  const sumTotal  = sumUber + sumDemae + sumRocket;
+  // 各日を分単位に切り捨て → 合計も分単位の積み上げで一致させる
+  const floorMin = s => Math.floor(s / 60) * 60;
+  Object.keys(byDay).forEach(dk => { ['uber','demae','rocket'].forEach(v => { byDay[dk][v] = floorMin(byDay[dk][v]); }); });
   const dayKeys   = Object.keys(byDay).sort();
+  const sumUber   = dayKeys.reduce((s,dk) => s + byDay[dk].uber,   0);
+  const sumDemae  = dayKeys.reduce((s,dk) => s + byDay[dk].demae,  0);
+  const sumRocket = dayKeys.reduce((s,dk) => s + byDay[dk].rocket, 0);
+  const sumTotal  = sumUber + sumDemae + sumRocket;
 
   const dayRows = dayKeys.map(dk => {
     const d = byDay[dk];
@@ -1830,10 +1833,13 @@ async function sendWorktimeToSheet() {
     if (!byDay[dk]) byDay[dk] = { uber:0, demae:0, rocket:0 };
     byDay[dk][r.vendor] += r.duration;
   });
-  const sumUber   = recs.filter(r=>r.vendor==='uber').reduce((s,r)=>s+r.duration,0);
-  const sumDemae  = recs.filter(r=>r.vendor==='demae').reduce((s,r)=>s+r.duration,0);
-  const sumRocket = recs.filter(r=>r.vendor==='rocket').reduce((s,r)=>s+r.duration,0);
-  const days = Object.keys(byDay).sort().map(dk => {
+  const floorMin = s => Math.floor(s / 60) * 60;
+  Object.keys(byDay).forEach(dk => { ['uber','demae','rocket'].forEach(v => { byDay[dk][v] = floorMin(byDay[dk][v]); }); });
+  const dKeys     = Object.keys(byDay).sort();
+  const sumUber   = dKeys.reduce((s,dk) => s + byDay[dk].uber,   0);
+  const sumDemae  = dKeys.reduce((s,dk) => s + byDay[dk].demae,  0);
+  const sumRocket = dKeys.reduce((s,dk) => s + byDay[dk].rocket, 0);
+  const days = dKeys.map(dk => {
     const d = byDay[dk]; const dt = new Date(dk+'T00:00:00');
     return { date: dk, dayOfWeek: DAYS[dt.getDay()], uber:d.uber, demae:d.demae, rocket:d.rocket, total:d.uber+d.demae+d.rocket };
   });
