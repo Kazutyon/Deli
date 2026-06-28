@@ -116,6 +116,7 @@
     .hbtn.add::before{content:"+";font-size:32px;line-height:1;font-weight:300;margin-top:-3px;}
     .hbtn.mail::before{content:"✉";font-size:20px;line-height:1;}
     .hbtn.settings::before{content:"⚙";font-size:20px;line-height:1;}
+    .hbtn.logout::before{content:"⏻";font-size:19px;line-height:1;}
     .sync-bar {
       display: flex; align-items: center; justify-content: space-between;
       font-size: 12px; color: #4b5563; margin-bottom: 14px;
@@ -382,8 +383,82 @@
     .empty::before { font-size: 19px; margin-right: 8px; }
     @media (max-width:430px){ .app{margin:6px;max-width:none;border-radius:20px;padding:15px 15px 0;} .header h1{font-size:20px;} .subtitle{font-size:10.5px;} .brand-mark{width:33px;height:33px;border-radius:11px;font-size:16px;} .header-btns{gap:9px;} .vendors{gap:10px;} }
   </style>
+  <!-- Firebase Auth (compat SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAQ9e3gvS_h5qFMMNC6lqrEg0h2Dza3Cs0",
+      authDomain: "delirog.firebaseapp.com",
+      projectId: "delirog",
+      storageBucket: "delirog.firebasestorage.app",
+      messagingSenderId: "395910993902",
+      appId: "1:395910993902:web:48ee9300426fd9d026e0ff"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
+
+<!-- ===== ログイン画面 ===== -->
+<div id="login-screen" style="
+  position:fixed; inset:0; z-index:200;
+  background: radial-gradient(circle at 20% 0%, rgba(34,197,94,.08), transparent 28%),
+              linear-gradient(180deg,#fbfbfb 0%,#f3f5f4 100%);
+  display:flex; align-items:center; justify-content:center; padding:20px;">
+  <div style="
+    background:rgba(255,255,255,.96); border-radius:22px; padding:36px 28px;
+    width:100%; max-width:340px;
+    border:1px solid #e8ecef;
+    box-shadow:0 14px 38px rgba(31,41,55,.1);">
+
+    <!-- ブランドロゴ -->
+    <div style="text-align:center; margin-bottom:28px;">
+      <div style="
+        width:48px; height:48px; border-radius:16px; margin:0 auto 10px;
+        background: radial-gradient(circle at 75% 25%, rgba(255,255,255,.34), transparent 24%),
+                    linear-gradient(145deg,#24c66c 0%,#159447 58%,#0f6f39 100%);
+        color:#fff; display:flex; align-items:center; justify-content:center;
+        font-size:24px; font-weight:900;
+        box-shadow:0 10px 22px rgba(21,148,71,.24);">D</div>
+      <div style="font-size:22px; font-weight:900; color:#0b1220; letter-spacing:.04em;">デリログ</div>
+      <div style="font-size:12px; color:#8a95a3; margin-top:4px;">フードデリバリー稼働管理</div>
+    </div>
+
+    <!-- メールアドレス -->
+    <div style="margin-bottom:12px;">
+      <div style="font-size:12px; color:#667085; font-weight:700; margin-bottom:5px;">メールアドレス</div>
+      <input type="email" id="login-email" placeholder="you@example.com"
+        autocomplete="email"
+        style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px;
+               font-size:15px; outline:none; background:#fff; color:#111827;"
+        onkeydown="if(event.key==='Enter') document.getElementById('login-password').focus()">
+    </div>
+
+    <!-- パスワード -->
+    <div style="margin-bottom:6px;">
+      <div style="font-size:12px; color:#667085; font-weight:700; margin-bottom:5px;">パスワード</div>
+      <input type="password" id="login-password" placeholder="パスワード"
+        autocomplete="current-password"
+        style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px;
+               font-size:15px; outline:none; background:#fff; color:#111827;"
+        onkeydown="if(event.key==='Enter') doLogin()">
+    </div>
+
+    <!-- エラー表示 -->
+    <div id="login-error" style="font-size:12px; color:#ef4444; min-height:20px; margin-bottom:6px;"></div>
+
+    <!-- ログインボタン -->
+    <button id="login-btn" onclick="doLogin()" style="
+      width:100%; padding:13px;
+      background:linear-gradient(135deg,#21a85b,#159447);
+      color:#fff; border:none; border-radius:10px;
+      font-size:15px; font-weight:800; cursor:pointer;
+      box-shadow:0 8px 18px rgba(33,168,91,.22);">ログイン</button>
+  </div>
+</div>
+<!-- ===== /ログイン画面 ===== -->
+
 <div class="app">
   <div class="header">
     <div class="brand">
@@ -397,6 +472,7 @@
       <button class="hbtn add" onclick="openModal(null)" title="追加" aria-label="追加"></button>
       <button class="hbtn mail" onclick="openMailModal()" title="メール" aria-label="メール"></button>
       <button class="hbtn settings" onclick="toggleSettings()" title="設定" aria-label="設定"></button>
+      <button class="hbtn logout" onclick="doLogout()" title="ログアウト" aria-label="ログアウト"></button>
     </div>
   </div>
 
@@ -1946,6 +2022,59 @@ updateSyncBar();
 if(cfg.gasUrl) syncFromGAS();
 setInterval(()=>{saveLocalData();render();},1000);
 render();
+
+// ===== Firebase Auth =====
+(function() {
+  const auth = firebase.auth();
+  const loginScreen = document.getElementById('login-screen');
+
+  // loadData() はすでに上で実行済み。ここでは表示制御のみ。
+  auth.onAuthStateChanged(function(user) {
+    loginScreen.style.display = user ? 'none' : 'flex';
+  });
+
+  window.doLogin = function() {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    const btn = document.getElementById('login-btn');
+
+    errEl.textContent = '';
+    if (!email || !password) {
+      errEl.textContent = 'メールアドレスとパスワードを入力してください';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'ログイン中...';
+
+    auth.signInWithEmailAndPassword(email, password)
+      .catch(function(error) {
+        btn.disabled = false;
+        btn.textContent = 'ログイン';
+        switch (error.code) {
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            errEl.textContent = 'メールアドレスまたはパスワードが違います';
+            break;
+          case 'auth/invalid-email':
+            errEl.textContent = 'メールアドレスの形式が正しくありません';
+            break;
+          case 'auth/too-many-requests':
+            errEl.textContent = 'しばらく待ってから再試行してください';
+            break;
+          default:
+            errEl.textContent = 'ログインに失敗しました（' + error.code + '）';
+        }
+      });
+  };
+
+  window.doLogout = function() {
+    if (!confirm('ログアウトしますか？')) return;
+    auth.signOut();
+  };
+})();
+// ===== /Firebase Auth =====
 </script>
 </body>
 </html>
