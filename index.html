@@ -583,16 +583,7 @@
     <div class="sec-label" style="margin-top:14px;">業者別時給</div>
     <div id="sales-hourly-area"></div>
 
-    <!-- 送信ボタン -->
-    <div style="margin-top:18px;margin-bottom:80px;">
-      <button id="send-btn" onclick="sendToSheet()"
-        style="width:100%;background:linear-gradient(135deg,#21a85b,#159447);color:#fff;
-               border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:800;
-               cursor:pointer;box-shadow:0 8px 18px rgba(33,168,91,.25);">
-        今日の記録をシートへ送信
-      </button>
-      <div id="send-status" style="text-align:center;font-size:12px;color:#6b7280;margin-top:8px;"></div>
-    </div>
+    <div style="margin-bottom:80px;"></div>
   </div>
 
   <div id="view-week" style="display:none;">
@@ -1986,12 +1977,6 @@ function renderNinteiSection(newIdx) {
       </div>
       ${dayRows}
     </div>` : '<div class="empty" style="margin-bottom:10px;">この期間の稼働記録がありません</div>'}
-    <button onclick="sendWorktimeToSheet()" id="nintei-send-btn"
-      style="width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:800;color:#fff;
-             background:linear-gradient(135deg,#1f6fea,#1558c9);cursor:pointer;">
-      稼働時間シートへ転記
-    </button>
-    <div id="nintei-send-status" style="text-align:center;font-size:12px;margin-top:6px;min-height:18px;color:#6b7280;"></div>
   `;
 }
 
