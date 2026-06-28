@@ -841,6 +841,7 @@ function setEarning(dayKey, vendor, field, value) {
   } else {
     d[vendor] = v;
   }
+  scheduleEarningsSave(dayKey);
   saveLocalData();
   render();
 }
@@ -851,12 +852,14 @@ function getDayCash(dayKey) {
 
 function addCashEntry(dayKey, vendor, amount) {
   getDayCash(dayKey).push({ ts: Date.now(), vendor, amount: Math.max(0, Math.round(safeNum(amount))) });
+  scheduleEarningsSave(dayKey);
   saveLocalData();
 }
 
 function removeCashEntry(dayKey, idx) {
   const list = getDayCash(dayKey);
   if (idx >= 0 && idx < list.length) list.splice(idx, 1);
+  scheduleEarningsSave(dayKey);
   saveLocalData();
 }
 
@@ -1202,6 +1205,25 @@ async function syncFromGAS() {
       }
       records = deduped;
       records.sort((a,b) => a.start - b.start);
+
+      // earnings 復元
+      if (data.allEarnings && Array.isArray(data.allEarnings)) {
+        data.allEarnings.forEach(function(e) {
+          if (!e.date) return;
+          const dayKey = e.date; // yyyy-MM-dd
+          const day = ensureDayEarnings(dayKey);
+          if (e.uber)   day.uber  = e.uber.sales  || 0;
+          if (e.demae)  day.demae = e.demae.sales || 0;
+          if (e.rocket) { day.rocket.delivery = e.rocket.delivery || 0; day.rocket.quest = e.rocket.quest || 0; }
+          if (e.cashLog && Array.isArray(e.cashLog)) day.cashLog = e.cashLog;
+          if (e.uber || e.demae || e.rocket) {
+            day.counts.uber   = (e.uber   ? e.uber.count   : 0) || 0;
+            day.counts.demae  = (e.demae  ? e.demae.count  : 0) || 0;
+            day.counts.rocket = (e.rocket ? e.rocket.count : 0) || 0;
+          }
+        });
+      }
+
       saveLocalData();
     }
     syncStatus = 'ok'; updateSyncBar(); render();
@@ -1676,7 +1698,7 @@ function renderSalesTab() {
             <input type="number" min="0" value="${dayCounts[v] || 0}"
               style="width:60px;text-align:right;padding:5px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
               onfocus="this.select()"
-              oninput="getDayCounts('${dayKey}')['${v}']=parseInt(this.value)||0;saveLocalData();">
+              oninput="getDayCounts('${dayKey}')['${v}']=parseInt(this.value)||0;scheduleEarningsSave('${dayKey}');saveLocalData();">
           </div>`).join('')}
       </div>`;
   }
@@ -2022,6 +2044,32 @@ updateSyncBar();
 if(cfg.gasUrl) syncFromGAS();
 setInterval(()=>{saveLocalData();render();},1000);
 render();
+
+// ===== earnings 自動保存 =====
+var _earningsSaveTimer = null;
+function scheduleEarningsSave(dayKey) {
+  clearTimeout(_earningsSaveTimer);
+  _earningsSaveTimer = setTimeout(function() { saveEarningsToGAS(dayKey); }, 2000);
+}
+async function saveEarningsToGAS(dayKey) {
+  if (!cfg.gasUrl) return;
+  try {
+    const d = ensureDayEarnings(dayKey);
+    await postToGAS({
+      action: 'saveEarnings',
+      date: dayKey,
+      uber:   { sales: d.uber  || 0, cash: getDayCashTotal(dayKey, 'uber'),  count: (d.counts && d.counts.uber)   || 0 },
+      demae:  { sales: d.demae || 0, cash: getDayCashTotal(dayKey, 'demae'), count: (d.counts && d.counts.demae)  || 0 },
+      rocket: { delivery: (d.rocket && d.rocket.delivery) || 0,
+                quest:    (d.rocket && d.rocket.quest)    || 0,
+                count:    (d.counts && d.counts.rocket)   || 0 },
+      cashLog: d.cashLog || []
+    });
+  } catch(e) {
+    console.error('[earnings save] GAS保存エラー:', e);
+  }
+}
+// ===== /earnings 自動保存 =====
 
 // ===== Firebase Auth =====
 (function() {
