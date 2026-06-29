@@ -702,9 +702,14 @@ const V = {
 const DAYS = ['日','月','火','水','木','金','土'];
 const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ': 'rocket' };
 const DAY_CUTOFF_HOUR = 4; // 4:00〜翌3:59 を「同じ日」として集計（Uber締め）
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn__DyDmLJ3lDdt6RB26VIB-xfpMfkoNDlDeor4xC/exec';
-
-let cfg = { weekStart: 1, weekMax: 20, mailTo: '', gasUrl: GAS_URL };
+let cfg = {
+  weekStart: 1,
+  weeklyTargetHours: null,
+  weeklySalesTarget: null,
+  enabledVendors: ['uber','demae','rocket'],
+  gasUrl: '',
+  devMode: false
+};
 let active = null, activeStart = null;
 let records = [];
 let completing = false;
@@ -718,8 +723,20 @@ let collapsedDays = {};
 function loadData() {
   try {
     const c = localStorage.getItem('fdc_cfg');
-    if (c) cfg = Object.assign(cfg, JSON.parse(c));
-    if (!cfg.gasUrl || cfg.gasUrl.indexOf('AKfycbwMH') !== -1) cfg.gasUrl = GAS_URL;
+    if (c) {
+      const saved = JSON.parse(c);
+      cfg = Object.assign(cfg, saved);
+      // weekMax → weeklyTargetHours 移行
+      if (typeof cfg.weekMax === 'number' && cfg.weeklyTargetHours === null) {
+        cfg.weeklyTargetHours = cfg.weekMax > 0 ? cfg.weekMax : null;
+        delete cfg.weekMax;
+      }
+      // 個人用 GAS URL を除去
+      if (cfg.gasUrl && cfg.gasUrl.includes('AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn')) {
+        cfg.gasUrl = '';
+      }
+      if (!Array.isArray(cfg.enabledVendors)) cfg.enabledVendors = ['uber','demae','rocket'];
+    }
     const r = localStorage.getItem('fdc_records');
     if (r) records = JSON.parse(r).map(x => ({ ...x, start: new Date(x.start), end: new Date(x.end) }));
     const e = localStorage.getItem('fdc_earnings');
@@ -741,10 +758,8 @@ function loadData() {
       if (!day.counts && legacyCounts[dayKey]) day.counts = legacyCounts[dayKey];
       if ((typeof day.sentAt === 'undefined' || day.sentAt === null) && legacySent[dayKey]) day.sentAt = legacySent[dayKey];
     });
-    document.getElementById('week-start').value = cfg.weekStart;
-    document.getElementById('week-max').value = cfg.weekMax;
-    document.getElementById('mail-to').value = cfg.mailTo || '';
-    document.getElementById('gas-url').value = cfg.gasUrl || '';
+    const wsEl = document.getElementById('week-start');
+    if (wsEl) wsEl.value = cfg.weekStart;
   } catch(e) {}
 }
 
@@ -763,10 +778,31 @@ function saveLocalData() {
 
 function saveSettings() {
   cfg.weekStart = parseInt(document.getElementById('week-start').value);
-  cfg.weekMax = parseInt(document.getElementById('week-max').value) || 20;
-  cfg.mailTo = document.getElementById('mail-to').value;
-  cfg.gasUrl = document.getElementById('gas-url').value;
-  saveLocalData(); updateSyncBar(); render();
+  const wthEl = document.getElementById('weekly-target-hours');
+  cfg.weeklyTargetHours = wthEl && wthEl.value !== '' ? (parseInt(wthEl.value) || null) : null;
+  const wstEl = document.getElementById('weekly-sales-target');
+  cfg.weeklySalesTarget = wstEl && wstEl.value !== '' ? (parseInt(wstEl.value) || null) : null;
+  cfg.enabledVendors = ['uber','demae','rocket'].filter(v => {
+    const el = document.getElementById('chk-vendor-' + v);
+    return el ? el.checked : true;
+  });
+  if (cfg.enabledVendors.length === 0) cfg.enabledVendors = ['uber'];
+  // 稼働中の業者はOFFにできない
+  if (active && !cfg.enabledVendors.includes(active)) {
+    cfg.enabledVendors.push(active);
+    const el = document.getElementById('chk-vendor-' + active);
+    if (el) el.checked = true;
+  }
+  const gasEl = document.getElementById('gas-url');
+  if (gasEl) cfg.gasUrl = gasEl.value;
+  saveLocalData();
+  updateSyncBar();
+  renderVendorGrid();
+  render();
+}
+
+function getEnabledVendors() {
+  return Object.keys(V).filter(v => (cfg.enabledVendors || ['uber','demae','rocket']).includes(v));
 }
 
 function toggleSettings() {
