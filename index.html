@@ -889,6 +889,88 @@ function switchTab(tab) {
 function renderHistory() { }
 function renderAnalysis() { }
 
+function toggleDetail() {
+  const panel = document.getElementById('detail-panel');
+  const label = document.getElementById('detail-toggle-label');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (label) label.textContent = isOpen ? '▶ 詳細を見る' : '▼ 詳細を見る';
+  if (!isOpen) updateDetailPanel();
+}
+
+function updateDetailPanel() {
+  const now = new Date();
+  const todayKey = businessDayKey(now);
+  const dEarn = ensureDayEarnings(todayKey);
+  const todayCash = getDayCash(todayKey).reduce((s,e) => s + e.amount, 0);
+  const todaySalesTotal = (dEarn.uber||0)+(dEarn.demae||0)+((dEarn.rocket?.delivery||0)+(dEarn.rocket?.quest||0))+todayCash;
+
+  // 今月売上
+  const monthKey = todayKey.slice(0,7);
+  let monthSales = 0;
+  const monthDays = new Set();
+  Object.entries(earnings).forEach(([dk, e]) => {
+    if (!dk.startsWith(monthKey)) return;
+    monthSales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+    monthDays.add(dk);
+  });
+  let monthWorkSec = 0;
+  records.forEach(r => { if (businessDayKey(r.start).startsWith(monthKey)) monthWorkSec += r.duration; });
+  const elM = document.getElementById('detail-monthly');
+  const elMS = document.getElementById('detail-monthly-sub');
+  if (elM) elM.textContent = money(monthSales);
+  if (elMS) elMS.textContent = '稼働 ' + monthDays.size + '日 ' + fmt(monthWorkSec);
+
+  // 昨日比
+  const yKey = businessDayKey(new Date(now.getTime() - 86400000));
+  const yE = earnings[yKey];
+  const ySales = yE ? (yE.uber||0)+(yE.demae||0)+((yE.rocket?.delivery||0)+(yE.rocket?.quest||0)) : null;
+  const elVsY = document.getElementById('detail-vs-yesterday');
+  if (elVsY) {
+    if (ySales === null) { elVsY.textContent = '-'; elVsY.style.color = '#6b7280'; }
+    else {
+      const d = todaySalesTotal - ySales;
+      elVsY.textContent = (d>=0?'+':'')+money(d);
+      elVsY.style.color = d>=0 ? 'var(--green)' : 'var(--red)';
+    }
+  }
+
+  // 先週同曜日比
+  const lwKey = businessDayKey(new Date(now.getTime() - 7*86400000));
+  const lwE = earnings[lwKey];
+  const lwSales = lwE ? (lwE.uber||0)+(lwE.demae||0)+((lwE.rocket?.delivery||0)+(lwE.rocket?.quest||0)) : null;
+  const elVsLw = document.getElementById('detail-vs-lastweek');
+  if (elVsLw) {
+    if (lwSales === null) { elVsLw.textContent = '-'; elVsLw.style.color = '#6b7280'; }
+    else {
+      const d = todaySalesTotal - lwSales;
+      elVsLw.textContent = (d>=0?'+':'')+money(d);
+      elVsLw.style.color = d>=0 ? 'var(--green)' : 'var(--red)';
+    }
+  }
+
+  // 週間目標売上バー
+  const barWrap = document.getElementById('detail-sales-bar-wrap');
+  if (barWrap) {
+    if (cfg.weeklySalesTarget) {
+      barWrap.style.display = 'block';
+      const {start:ws} = getWeekRange(now);
+      let weekSales = 0;
+      Object.entries(earnings).forEach(([dk, e]) => {
+        const dt = new Date(dk+'T'+String(DAY_CUTOFF_HOUR).padStart(2,'0')+':00:00');
+        if (dt >= ws) weekSales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+      });
+      const pct = Math.min(100, Math.round(weekSales/cfg.weeklySalesTarget*100));
+      const bar = document.getElementById('detail-sales-bar');
+      const barLabel = document.getElementById('detail-sales-bar-label');
+      if (bar) bar.style.width = pct+'%';
+      if (barLabel) barLabel.textContent = money(weekSales)+' / '+money(cfg.weeklySalesTarget)+'（あと'+money(Math.max(0,cfg.weeklySalesTarget-weekSales))+'）';
+    } else {
+      barWrap.style.display = 'none';
+    }
+  }
+}
+
 function changeWeek(delta) {
   weekOffset += delta;
   if (currentTab === 'history') renderHistory(); else render();
