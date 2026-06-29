@@ -666,6 +666,7 @@
       <button class="htab active" id="htab-daily" onclick="switchHistoryTab('daily')">日別</button>
       <button class="htab" id="htab-weekly" onclick="switchHistoryTab('weekly')">週別</button>
       <button class="htab" id="htab-monthly" onclick="switchHistoryTab('monthly')">月別</button>
+      <button class="htab" id="htab-all" onclick="switchHistoryTab('all')">全記録</button>
     </div>
 
     <div id="hview-daily">
@@ -698,10 +699,14 @@
                cursor:pointer;color:#374151;">📥 月別データをCSV出力</button>
     </div>
 
-    <button onclick="exportCSV('all')"
-      style="margin-top:8px;width:100%;padding:10px;background:#ecfdf5;
-             border:1px solid #a7f3d0;border-radius:10px;font-size:13px;font-weight:700;
-             cursor:pointer;color:#065f46;">📥 全記録CSV出力（確定申告用）</button>
+    <div id="hview-all" style="display:none;">
+      <div id="history-all-content"></div>
+      <button onclick="exportCSV('all')"
+        style="margin-top:10px;width:100%;padding:10px;background:#ecfdf5;
+               border:1px solid #a7f3d0;border-radius:10px;font-size:13px;font-weight:700;
+               cursor:pointer;color:#065f46;">📥 全記録CSV出力（確定申告用）</button>
+    </div>
+
     <div style="margin-bottom:80px;"></div>
   </div>
 
@@ -968,7 +973,7 @@ let currentHistoryTab = 'daily';
 
 function switchHistoryTab(tab) {
   currentHistoryTab = tab;
-  ['daily','weekly','monthly'].forEach(t => {
+  ['daily','weekly','monthly','all'].forEach(t => {
     const btn = document.getElementById('htab-'+t);
     if (btn) btn.className = 'htab'+(t===tab?' active':'');
     const view = document.getElementById('hview-'+t);
@@ -980,7 +985,8 @@ function switchHistoryTab(tab) {
 function renderHistory() {
   if (currentHistoryTab==='daily') renderHistoryDaily();
   else if (currentHistoryTab==='weekly') renderHistoryWeekly();
-  else renderHistoryMonthly();
+  else if (currentHistoryTab==='monthly') renderHistoryMonthly();
+  else renderHistoryAll();
 }
 
 function renderHistoryDaily() {
@@ -1084,6 +1090,20 @@ function renderHistoryMonthly() {
         <div><div style="font-size:10px;color:#6b7280;">時給</div><div style="font-weight:700;font-size:13px;">${hourly?money(hourly):'-'}</div></div>
       </div></div>`;
   }).join('');
+}
+
+function renderHistoryAll() {
+  const content = document.getElementById('history-all-content');
+  if (!content) return;
+  if (!records.length) { content.innerHTML='<div class="empty">記録がありません</div>'; return; }
+  const byDay = {};
+  records.forEach(r => {
+    const dk = businessDayKey(r.start);
+    if (!byDay[dk]) byDay[dk] = {key:dk, items:[]};
+    byDay[dk].items.push(r);
+  });
+  const sorted = Object.values(byDay).sort((a,b)=>a.key<b.key?1:-1);
+  content.innerHTML = sorted.map(day=>buildDayGroup(day,{collapsible:true})).join('');
 }
 
 let currentAnalysisTab = 'monthly';
