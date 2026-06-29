@@ -1729,88 +1729,88 @@ function renderSalesTab() {
   // 売上入力
   const earningsArea = document.getElementById('sales-earnings-area');
   if (earningsArea && !document.activeElement?.closest('#sales-earnings-area')) {
-    earningsArea.innerHTML = `
-      <div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;">
-        <div class="week-vendor-row" style="gap:10px;align-items:center;">
-          <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
-            <span style="width:8px;height:8px;border-radius:50%;background:${V.uber.color};display:inline-block;"></span>
-            Uber Eats
-          </span>
+    const enabled = getEnabledVendors();
+    let rows = '';
+    if (enabled.includes('uber')) rows += `
+      <div class="week-vendor-row" style="gap:10px;align-items:center;">
+        <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${V.uber.color};display:inline-block;"></span>Uber Eats
+        </span>
+        <input type="text" inputmode="numeric" pattern="[0-9]*"
+          style="width:120px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+          value="${moneyInputValue(dEarn.uber)}" onfocus="this.select()"
+          oninput="setEarning('${dayKey}','uber',null,this.value)">
+        <span style="color:#888;font-size:11px;">円</span>
+      </div>`;
+    if (enabled.includes('demae')) rows += `
+      <div class="week-vendor-row" style="gap:10px;align-items:center;margin-top:6px;">
+        <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${V.demae.color};display:inline-block;"></span>出前館
+        </span>
+        <input type="text" inputmode="numeric" pattern="[0-9]*"
+          style="width:120px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+          value="${moneyInputValue(dEarn.demae)}" onfocus="this.select()"
+          oninput="setEarning('${dayKey}','demae',null,this.value)">
+        <span style="color:#888;font-size:11px;">円</span>
+      </div>`;
+    if (enabled.includes('rocket')) rows += `
+      <div class="week-vendor-row" style="gap:10px;align-items:center;margin-top:6px;">
+        <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${V.rocket.color};display:inline-block;"></span>ロケット
+        </span>
+        <div style="display:flex;gap:4px;align-items:center;">
           <input type="text" inputmode="numeric" pattern="[0-9]*"
-            style="width:120px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
-            value="${moneyInputValue(dEarn.uber)}" onfocus="this.select()"
-            oninput="setEarning('${dayKey}','uber',null,this.value)">
-          <span style="color:#888;font-size:11px;">円</span>
-        </div>
-        <div class="week-vendor-row" style="gap:10px;align-items:center;margin-top:6px;">
-          <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
-            <span style="width:8px;height:8px;border-radius:50%;background:${V.demae.color};display:inline-block;"></span>
-            出前館
-          </span>
+            style="width:72px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+            value="${moneyInputValue(dEarn.rocket?.delivery)}" onfocus="this.select()"
+            oninput="setEarning('${dayKey}','rocket','delivery',this.value)">
+          <span style="color:#888;font-size:10px;">配達</span>
           <input type="text" inputmode="numeric" pattern="[0-9]*"
-            style="width:120px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
-            value="${moneyInputValue(dEarn.demae)}" onfocus="this.select()"
-            oninput="setEarning('${dayKey}','demae',null,this.value)">
-          <span style="color:#888;font-size:11px;">円</span>
-        </div>
-        <div class="week-vendor-row" style="gap:10px;align-items:center;margin-top:6px;">
-          <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
-            <span style="width:8px;height:8px;border-radius:50%;background:${V.rocket.color};display:inline-block;"></span>
-            ロケット
-          </span>
-          <div style="display:flex;gap:4px;align-items:center;">
-            <input type="text" inputmode="numeric" pattern="[0-9]*"
-              style="width:72px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
-              value="${moneyInputValue(dEarn.rocket?.delivery)}" onfocus="this.select()"
-              oninput="setEarning('${dayKey}','rocket','delivery',this.value)">
-            <span style="color:#888;font-size:10px;">配達</span>
-            <input type="text" inputmode="numeric" pattern="[0-9]*"
-              style="width:72px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
-              value="${moneyInputValue(dEarn.rocket?.quest)}" onfocus="this.select()"
-              oninput="setEarning('${dayKey}','rocket','quest',this.value)">
-            <span style="color:#888;font-size:10px;">クエ</span>
-          </div>
+            style="width:72px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+            value="${moneyInputValue(dEarn.rocket?.quest)}" onfocus="this.select()"
+            oninput="setEarning('${dayKey}','rocket','quest',this.value)">
+          <span style="color:#888;font-size:10px;">クエ</span>
         </div>
       </div>`;
+    earningsArea.innerHTML = `<div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;">${rows}</div>`;
   }
 
   // 件数入力
   const countsArea = document.getElementById('sales-counts-area');
   if (countsArea && !document.activeElement?.closest('#sales-counts-area')) {
-    countsArea.innerHTML = `
-      <div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;">
-        ${['uber','demae','rocket'].map(v => `
-          <div style="display:flex;justify-content:space-between;align-items:center;
-                      padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
-            <span style="display:flex;align-items:center;gap:6px;">
-              <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
-              ${V[v].name}
-            </span>
-            <input type="number" min="0" value="${dayCounts[v] || 0}"
-              style="width:60px;text-align:right;padding:5px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
-              onfocus="this.select()"
-              oninput="getDayCounts('${dayKey}')['${v}']=parseInt(this.value)||0;scheduleEarningsSave('${dayKey}');saveLocalData();">
-          </div>`).join('')}
-      </div>`;
+    const enabled = getEnabledVendors();
+    countsArea.innerHTML = `<div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;">
+      ${enabled.map(v => `
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+          <span style="display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+            ${V[v].name}
+          </span>
+          <input type="number" min="0" value="${dayCounts[v]||0}"
+            style="width:60px;text-align:right;padding:5px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+            onfocus="this.select()"
+            oninput="getDayCounts('${dayKey}')['${v}']=parseInt(this.value)||0;scheduleEarningsSave('${dayKey}');saveLocalData();">
+        </div>`).join('')}
+    </div>`;
   }
 
   // 業者別時給
   const hourlyArea = document.getElementById('sales-hourly-area');
   if (hourlyArea) {
-    const rows = Object.keys(V).map(v => {
+    const enabled = getEnabledVendors();
+    const rows = enabled.map(v => {
       const sec = getVendorWorkSeconds(dayKey, v);
-      const sale = v === 'rocket'
-        ? (dEarn.rocket?.delivery || 0) + (dEarn.rocket?.quest || 0)
-        : (dEarn[v] || 0);
-      const h = sec > 0 ? Math.round(sale / (sec / 3600)) : null;
+      const sale = v==='rocket'
+        ? (dEarn.rocket?.delivery||0)+(dEarn.rocket?.quest||0)
+        : (dEarn[v]||0);
+      const h = sec>0 ? Math.round(sale/(sec/3600)) : null;
       return `<div style="display:flex;justify-content:space-between;align-items:center;
                            padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
         <span style="display:flex;align-items:center;gap:6px;">
           <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
-          ${V[v].name}
-          <span style="font-size:10px;color:#6b7280;">(${fmt(sec)})</span>
+          ${V[v].name}<span style="font-size:10px;color:#6b7280;">(${fmt(sec)})</span>
         </span>
-        <strong style="color:#111;">${h !== null ? money(h) + '/h' : '-'}</strong>
+        <strong>${h!==null ? money(h)+'/h' : '-'}</strong>
       </div>`;
     }).join('');
     hourlyArea.innerHTML = `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px;">${rows}</div>`;
