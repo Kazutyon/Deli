@@ -587,7 +587,7 @@
         <div class="vtime" id="vt-rocket">0:00</div>
       </div>
     </div>
-    <div id="today-summary" onclick="switchTab('all')"
+    <div id="today-summary" onclick="switchTab('history')"
          style="text-align:center;font-size:12px;color:#6b7280;padding:10px;cursor:pointer;
                 background:#f9fafb;border-radius:10px;border:1px solid #edf0f3;margin-bottom:14px;">
       今日 0件 / 計 0:00 ▸ 記録を見る
@@ -620,7 +620,7 @@
     <div style="margin-bottom:80px;"></div>
   </div>
 
-  <div id="view-week" style="display:none;">
+  <div id="view-history" style="display:none;">
     <div class="date-label" id="week-range-label2"></div>
     <div class="week-nav">
       <button class="week-nav-btn" onclick="changeWeek(-1)"><span class="nav-arrow">‹</span><span>先週</span></button>
@@ -633,9 +633,9 @@
     <div id="week-detail"></div>
   </div>
 
-  <div id="view-all" style="display:none;">
-    <div class="sec-label">全記録（新しい順）</div>
-    <div id="all-records"></div>
+  <div id="view-analysis" style="display:none;">
+    <div class="sec-label">分析</div>
+    <div id="analysis-placeholder"></div>
   </div>
 
   <div class="bottom-tab-bar">
@@ -645,11 +645,11 @@
     <div class="btab" id="btab-sales" onclick="switchTab('sales')">
       <span class="btab-icon">💴</span><span>売上</span>
     </div>
-    <div class="btab" id="btab-week" onclick="switchTab('week')">
-      <span class="btab-icon">📅</span><span>今週</span>
+    <div class="btab" id="btab-history" onclick="switchTab('history')">
+      <span class="btab-icon">📅</span><span>履歴</span>
     </div>
-    <div class="btab" id="btab-all" onclick="switchTab('all')">
-      <span class="btab-icon">📋</span><span>全記録</span>
+    <div class="btab" id="btab-analysis" onclick="switchTab('analysis')">
+      <span class="btab-icon">📊</span><span>分析</span>
     </div>
   </div>
 </div>
@@ -847,7 +847,7 @@ function toggleDevMode() {
 
 function switchTab(tab) {
   currentTab = tab;
-  const tabs = ['active','sales','week','all'];
+  const tabs = ['active','sales','history','analysis'];
   tabs.forEach(t => {
     const btn = document.getElementById('btab-' + t);
     if (btn) {
@@ -856,16 +856,21 @@ function switchTab(tab) {
     const view = document.getElementById('view-' + t);
     if (view) view.style.display = t === tab ? 'block' : 'none';
   });
-  render();
+  if (tab === 'history') renderHistory();
+  else if (tab === 'analysis') renderAnalysis();
+  else render();
 }
+
+function renderHistory() { }
+function renderAnalysis() { }
 
 function changeWeek(delta) {
   weekOffset += delta;
-  render();
+  if (currentTab === 'history') renderHistory(); else render();
 }
 function resetWeek() {
   weekOffset = 0;
-  render();
+  if (currentTab === 'history') renderHistory(); else render();
 }
 
 function money(n) {
@@ -1752,63 +1757,6 @@ function render() {
   });
 
 
-  if(currentTab==='week'){
-    const wByV={};
-    const weekRecs2=records.filter(r=>r.start>=ws2&&r.start<=we2);
-    weekRecs2.forEach(r=>{wByV[r.vendor]=(wByV[r.vendor]||0)+r.duration;});
-    const wTotal=Object.values(wByV).reduce((s,v)=>s+v,0);
-    let vs=Object.keys(V).filter(v=>wByV[v]).map(v=>`<div class="week-vendor-row">
-      <span style="display:flex;align-items:center;gap:6px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
-        <span>${V[v].name}</span>
-      </span>
-      <span>${fmt(wByV[v])}</span>
-    </div>`).join('');
-    vs+=`<div class="week-total-row"><span>合計</span><span>${fmt(wTotal)} / ${cfg.weekMax}:00</span></div>`;
-    document.getElementById('week-vendor-summary').innerHTML=vs||'<div class="empty">今週の記録がありません</div>';
-    const byDay={};
-    weekRecs2.forEach(r=>{
-      const dk=businessDayKey(r.start);
-      if(!byDay[dk])byDay[dk]={key:dk,items:[]};
-      byDay[dk].items.push(r);
-    });
-    document.getElementById('week-detail').innerHTML=Object.values(byDay)
-      .sort((a,b)=> (a.key<b.key?1:-1))
-      .map(day => buildDayGroup(day))
-      .join('')||'<div class="empty">今週の記録がありません</div>';
-
-  }
-
-  if(currentTab==='all'){
-    const allDayKey = businessDayKey(now);
-    const todayRecsAll = records.filter(r => businessDayKey(r.start) === allDayKey);
-    let allHtml = '';
-
-    if (todayRecsAll.length > 0) {
-      allHtml += `<div style="font-size:12px;font-weight:800;color:#21a85b;
-                               margin-bottom:6px;padding:2px 4px;">📅 今日の記録</div>`;
-      allHtml += todayRecsAll.slice().reverse().map(r => recordItem(r)).join('');
-      allHtml += `<div style="height:1px;background:#edf0f3;margin:12px 0;"></div>`;
-    }
-
-    const byDay = {};
-    records.forEach(r => {
-      const dk = businessDayKey(r.start);
-      if (dk === allDayKey) return;
-      if (!byDay[dk]) byDay[dk] = { key: dk, items: [] };
-      byDay[dk].items.push(r);
-    });
-
-    const pastHtml = Object.values(byDay)
-      .sort((a, b) => (a.key < b.key ? 1 : -1))
-      .map(day => {
-        const dk = day.key;
-        return buildDayGroup(day, { collapsible: true });
-      }).join('');
-
-    allHtml += pastHtml || (todayRecsAll.length === 0 ? '<div class="empty">記録がありません</div>' : '');
-    document.getElementById('all-records').innerHTML = allHtml;
-  }
   if (currentTab === 'sales') renderSalesTab();
 }
 
