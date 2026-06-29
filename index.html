@@ -392,6 +392,7 @@
   <!-- Firebase Auth (compat SDK) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyAQ9e3gvS_h5qFMMNC6lqrEg0h2Dza3Cs0",
@@ -402,68 +403,15 @@
       appId: "1:395910993902:web:48ee9300426fd9d026e0ff"
     };
     firebase.initializeApp(firebaseConfig);
+    firebase.firestore().enablePersistence().catch(function(err) {
+      if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
+        console.warn('[Firestore] persistence error:', err.code);
+      }
+    });
   </script>
 </head>
 <body>
 
-<!-- ===== ログイン画面 ===== -->
-<div id="login-screen" style="
-  position:fixed; inset:0; z-index:200;
-  background: radial-gradient(circle at 20% 0%, rgba(34,197,94,.08), transparent 28%),
-              linear-gradient(180deg,#fbfbfb 0%,#f3f5f4 100%);
-  display:flex; align-items:center; justify-content:center; padding:20px;">
-  <div style="
-    background:rgba(255,255,255,.96); border-radius:22px; padding:36px 28px;
-    width:100%; max-width:340px;
-    border:1px solid #e8ecef;
-    box-shadow:0 14px 38px rgba(31,41,55,.1);">
-
-    <!-- ブランドロゴ -->
-    <div style="text-align:center; margin-bottom:28px;">
-      <div style="
-        width:48px; height:48px; border-radius:16px; margin:0 auto 10px;
-        background: radial-gradient(circle at 75% 25%, rgba(255,255,255,.34), transparent 24%),
-                    linear-gradient(145deg,#24c66c 0%,#159447 58%,#0f6f39 100%);
-        color:#fff; display:flex; align-items:center; justify-content:center;
-        font-size:24px; font-weight:900;
-        box-shadow:0 10px 22px rgba(21,148,71,.24);">D</div>
-      <div style="font-size:22px; font-weight:900; color:#0b1220; letter-spacing:.04em;">デリログ</div>
-      <div style="font-size:12px; color:#8a95a3; margin-top:4px;">フードデリバリー稼働管理</div>
-    </div>
-
-    <!-- メールアドレス -->
-    <div style="margin-bottom:12px;">
-      <div style="font-size:12px; color:#667085; font-weight:700; margin-bottom:5px;">メールアドレス</div>
-      <input type="email" id="login-email" placeholder="you@example.com"
-        autocomplete="email"
-        style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px;
-               font-size:15px; outline:none; background:#fff; color:#111827;"
-        onkeydown="if(event.key==='Enter') document.getElementById('login-password').focus()">
-    </div>
-
-    <!-- パスワード -->
-    <div style="margin-bottom:6px;">
-      <div style="font-size:12px; color:#667085; font-weight:700; margin-bottom:5px;">パスワード</div>
-      <input type="password" id="login-password" placeholder="パスワード"
-        autocomplete="current-password"
-        style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px;
-               font-size:15px; outline:none; background:#fff; color:#111827;"
-        onkeydown="if(event.key==='Enter') doLogin()">
-    </div>
-
-    <!-- エラー表示 -->
-    <div id="login-error" style="font-size:12px; color:#ef4444; min-height:20px; margin-bottom:6px;"></div>
-
-    <!-- ログインボタン -->
-    <button id="login-btn" onclick="doLogin()" style="
-      width:100%; padding:13px;
-      background:linear-gradient(135deg,#21a85b,#159447);
-      color:#fff; border:none; border-radius:10px;
-      font-size:15px; font-weight:800; cursor:pointer;
-      box-shadow:0 8px 18px rgba(33,168,91,.22);">ログイン</button>
-  </div>
-</div>
-<!-- ===== /ログイン画面 ===== -->
 
 <div class="app">
   <div class="header">
@@ -477,7 +425,29 @@
     <div class="header-btns">
       <button class="hbtn add" onclick="openModal(null)" title="追加" aria-label="追加"></button>
       <button class="hbtn settings" onclick="toggleSettings()" title="設定" aria-label="設定"></button>
-      <button class="hbtn logout" onclick="doLogout()" title="ログアウト" aria-label="ログアウト"></button>
+      <button id="auth-badge" onclick="handleAuthBadgeClick()"
+        style="background:none;border:1px solid #e2e8f0;border-radius:999px;
+               padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#6b7280;
+               white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;">
+        👤 ゲスト
+      </button>
+    </div>
+  </div>
+
+  <div id="migration-banner" style="display:none;
+    background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;
+    padding:10px 12px;margin-bottom:10px;font-size:13px;">
+    <div id="migration-banner-msg"></div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button id="migration-btn-ok"
+        style="background:#21a85b;color:#fff;border:none;border-radius:6px;
+               padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;"></button>
+      <button id="migration-btn-delete"
+        style="background:#ef4444;color:#fff;border:none;border-radius:6px;
+               padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">削除して新規スタート</button>
+      <button id="migration-btn-later"
+        style="background:none;border:1px solid #d1d5db;border-radius:6px;
+               padding:5px 12px;font-size:12px;color:#6b7280;cursor:pointer;">あとで</button>
     </div>
   </div>
 
@@ -2319,56 +2289,126 @@ async function saveEarningsToGAS(dayKey) {
 // ===== /earnings 自動保存 =====
 
 // ===== Firebase Auth =====
+window.DS_currentUser = null;
+// DataService のダミー（Task 2 で本実装に置き換え）
+window.DS = window.DS || {
+  init: function() { return Promise.resolve(); },
+  deleteAllUserData: function() { return Promise.resolve(); }
+};
+
 (function() {
   const auth = firebase.auth();
-  const loginScreen = document.getElementById('login-screen');
+  const provider = new firebase.auth.GoogleAuthProvider();
 
-  // loadData() はすでに上で実行済み。ここでは表示制御のみ。
-  auth.onAuthStateChanged(function(user) {
-    loginScreen.style.display = user ? 'none' : 'flex';
+  // redirect ログイン完了チェック（起動時1回）
+  auth.getRedirectResult().then(function(result) {
+    // onAuthStateChanged が発火するので追加処理不要
+  }).catch(function(err) {
+    console.warn('[Auth] getRedirectResult error:', err.code);
   });
 
-  window.doLogin = function() {
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    const errEl = document.getElementById('login-error');
-    const btn = document.getElementById('login-btn');
-
-    errEl.textContent = '';
-    if (!email || !password) {
-      errEl.textContent = 'メールアドレスとパスワードを入力してください';
-      return;
-    }
-    btn.disabled = true;
-    btn.textContent = 'ログイン中...';
-
-    auth.signInWithEmailAndPassword(email, password)
-      .catch(function(error) {
-        btn.disabled = false;
-        btn.textContent = 'ログイン';
-        switch (error.code) {
-          case 'auth/user-not-found':
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential':
-            errEl.textContent = 'メールアドレスまたはパスワードが違います';
-            break;
-          case 'auth/invalid-email':
-            errEl.textContent = 'メールアドレスの形式が正しくありません';
-            break;
-          case 'auth/too-many-requests':
-            errEl.textContent = 'しばらく待ってから再試行してください';
-            break;
-          default:
-            errEl.textContent = 'ログインに失敗しました（' + error.code + '）';
-        }
+  // ログイン状態変化
+  auth.onAuthStateChanged(function(user) {
+    window.DS_currentUser = user;
+    updateAuthBadge(user);
+    if (user) {
+      // Firestore モードで DataService を再初期化してデータ読み直し
+      DS.init(user).then(function() {
+        render();
+        showMigrationBannerIfNeeded();
       });
+    } else {
+      // guest モードで DataService を再初期化
+      DS.init(null).then(function() {
+        render();
+      });
+    }
+  });
+
+  window.handleAuthBadgeClick = function() {
+    if (window.DS_currentUser) {
+      // ログイン済み → メニュー
+      const menu = [
+        { label: 'ログアウト', fn: doLogout },
+        { label: 'アカウントを削除', fn: doDeleteAccount }
+      ];
+      const choice = confirm(
+        window.DS_currentUser.displayName + ' としてログイン中\n\nOK: ログアウト\nキャンセル: 閉じる'
+      );
+      if (choice) doLogout();
+    } else {
+      // ゲスト → Google ログイン
+      doGoogleLogin();
+    }
+  };
+
+  window.doGoogleLogin = function() {
+    auth.signInWithPopup(provider).catch(function(err) {
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-cancelled-by-user') {
+        auth.signInWithRedirect(provider);
+      } else if (err.code !== 'auth/cancelled-popup-request') {
+        showToast('ログインに失敗しました: ' + err.code);
+      }
+    });
   };
 
   window.doLogout = function() {
     if (!confirm('ログアウトしますか？')) return;
     auth.signOut();
+    // onAuthStateChanged → DS.init(null) で guest モードに戻る
+  };
+
+  window.doDeleteAccount = async function() {
+    if (!window.DS_currentUser) return;
+    if (!confirm('アカウントとすべてのデータを削除します。元に戻せません。\n本当に削除しますか？')) return;
+    try {
+      await DS.deleteAllUserData();
+      await window.DS_currentUser.delete();
+      showToast('アカウントを削除しました');
+    } catch(err) {
+      if (err.code === 'auth/requires-recent-login') {
+        showToast('セキュリティのため、一度ログアウトして再ログインしてから削除してください');
+      } else {
+        showToast('削除に失敗しました: ' + err.code);
+      }
+    }
   };
 })();
+
+function updateAuthBadge(user) {
+  const badge = document.getElementById('auth-badge');
+  if (!badge) return;
+  if (user) {
+    const initial = (user.displayName || user.email || '?')[0].toUpperCase();
+    badge.textContent = initial;
+    badge.title = user.displayName || user.email;
+    badge.style.background = '#21a85b';
+    badge.style.color = '#fff';
+    badge.style.border = 'none';
+  } else {
+    badge.textContent = '👤 ゲスト';
+    badge.style.background = 'none';
+    badge.style.color = '#6b7280';
+    badge.style.border = '1px solid #e2e8f0';
+    badge.title = 'ログインしてクラウド保存';
+  }
+}
+
+function showToast(msg) {
+  let t = document.getElementById('_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);' +
+      'background:#111827;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;' +
+      'z-index:999;pointer-events:none;opacity:0;transition:opacity .2s;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function() { t.style.opacity = '0'; }, 3000);
+}
 // ===== /Firebase Auth =====
 </script>
 </body>
