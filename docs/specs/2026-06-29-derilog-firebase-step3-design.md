@@ -84,7 +84,6 @@ users/
   {uid}/
     cfg                    ← ドキュメント（設定 1件）
       weekStart: 1
-      weekStart: 1
       weeklyTargetHours: null
       weeklySalesTarget: null
       enabledVendors: ["uber","demae","rocket"]
@@ -233,7 +232,7 @@ DataService.hasMigrationData() === true
 
 - `enableIndexedDbPersistence()` は同一ブラウザの複数タブで同時に使うと警告が出る（`failed-precondition`）。エラーは無視して続行する（Firestore は動く）
 - `records` の `start` / `end` は Firestore では `Timestamp` 型。読み込み時に `Date` に変換が必要（既存の `new Date(x.start)` パターンを流用）
-- Google Sign-In ポップアップはモバイルでブロックされることがある。その場合は `signInWithRedirect` にフォールバックする
+- Google Sign-In ポップアップは iOS Safari / 一部 WebView でブロックされることがある。`signInWithPopup` がエラー（`auth/popup-blocked`）を返した場合は `signInWithRedirect` にフォールバックする
 - GAS debounce 自動保存は DataService の `saveEarnings` に統合（既存の saveEarnings を DataService に委譲）
 
 ---
