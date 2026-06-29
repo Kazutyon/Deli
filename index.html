@@ -1076,7 +1076,112 @@ function renderHistoryMonthly() {
   }).join('');
 }
 
-function renderAnalysis() { }
+let currentAnalysisTab = 'monthly';
+
+function switchAnalysisTab(tab) {
+  currentAnalysisTab = tab;
+  ['monthly','vendor','weekday'].forEach(t => {
+    const btn=document.getElementById('atab-'+t);
+    if(btn) btn.className='htab'+(t===tab?' active':'');
+    const view=document.getElementById('aview-'+t);
+    if(view) view.style.display=t===tab?'block':'none';
+  });
+  renderAnalysis();
+}
+
+function renderAnalysis() {
+  if(currentAnalysisTab==='monthly') renderAnalysisMonthly();
+  else if(currentAnalysisTab==='vendor') renderAnalysisVendor();
+  else renderAnalysisWeekday();
+}
+
+function renderAnalysisMonthly() {
+  const months={};
+  records.forEach(r=>{const mk=businessDayKey(r.start).slice(0,7);if(!months[mk])months[mk]={sec:0,sales:0,count:0,days:new Set()};months[mk].sec+=r.duration;months[mk].days.add(businessDayKey(r.start));});
+  Object.entries(earnings).forEach(([dk,e])=>{const mk=dk.slice(0,7);if(!months[mk])return;months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));Object.values(e.counts||{}).forEach(c=>{months[mk].count+=(c||0);});});
+  const content=document.getElementById('analysis-monthly-content');
+  if(!content) return;
+  const keys=Object.keys(months).sort().reverse();
+  if(!keys.length){content.innerHTML='<div class="empty">記録がありません</div>';return;}
+  const header=`<div style="display:grid;grid-template-columns:52px repeat(6,1fr);gap:2px;font-size:10px;font-weight:700;color:#6b7280;padding:6px 8px;background:#f9fafb;border-radius:8px 8px 0 0;">
+    <span>月</span><span>売上</span><span>稼働h</span><span>稼働日</span><span>件数</span><span>時給</span><span>先月比</span>
+  </div>`;
+  const rows=keys.map((mk,i)=>{
+    const m=months[mk]; const[y,mo]=mk.split('-');
+    const h=m.sec/3600; const hourly=m.sec>0?Math.round(m.sales/h):null;
+    const prevKey=keys[i+1]; const prevSales=prevKey?months[prevKey].sales:null;
+    let vsLabel='-',vsColor='#6b7280';
+    if(prevSales!==null){const d=m.sales-prevSales;vsLabel=(d>=0?'+':'')+Math.round(d/1000)+'k';vsColor=d>=0?'#16a34a':'#dc2626';}
+    return `<div style="display:grid;grid-template-columns:52px repeat(6,1fr);gap:2px;font-size:11px;padding:8px;border-bottom:1px solid #f0f0f0;align-items:center;">
+      <span style="font-weight:700;">${parseInt(mo)}月</span>
+      <span style="font-weight:800;">${Math.round(m.sales/1000)}k</span>
+      <span>${h.toFixed(1)}</span><span>${m.days.size}</span><span>${m.count}</span>
+      <span>${hourly?Math.round(hourly/100)*100:'-'}</span>
+      <span style="color:${vsColor};font-weight:700;">${vsLabel}</span>
+    </div>`;
+  }).join('');
+  content.innerHTML=`<div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;overflow:hidden;">${header}${rows}</div>`;
+}
+
+function renderAnalysisVendor() {
+  const stats={};
+  records.forEach(r=>{if(!stats[r.vendor])stats[r.vendor]={sec:0,sales:0,count:0};stats[r.vendor].sec+=r.duration;});
+  Object.entries(earnings).forEach(([dk,e])=>{
+    if(stats.uber){stats.uber.sales+=(e.uber||0);stats.uber.count+=(e.counts?.uber||0);}
+    if(stats.demae){stats.demae.sales+=(e.demae||0);stats.demae.count+=(e.counts?.demae||0);}
+    if(stats.rocket){stats.rocket.sales+=((e.rocket?.delivery||0)+(e.rocket?.quest||0));stats.rocket.count+=(e.counts?.rocket||0);}
+  });
+  const content=document.getElementById('analysis-vendor-content');
+  if(!content) return;
+  const enabled=getEnabledVendors().filter(v=>stats[v]);
+  if(!enabled.length){content.innerHTML='<div class="empty">記録がありません</div>';return;}
+  content.innerHTML=enabled.map(v=>{
+    const s=stats[v]; const h=s.sec/3600;
+    const hourly=s.sec>0?Math.round(s.sales/h):null;
+    const unit=s.count>0?Math.round(s.sales/s.count):null;
+    return `<div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:14px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>
+        <span style="font-weight:800;font-size:14px;">${V[v].name}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);text-align:center;gap:8px;">
+        <div><div style="font-size:10px;color:#6b7280;">売上合計</div><div style="font-weight:700;font-size:12px;">${money(s.sales)}</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">件数</div><div style="font-weight:700;font-size:12px;">${s.count}</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">時給</div><div style="font-weight:700;font-size:12px;">${hourly?money(hourly):'-'}</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">単価</div><div style="font-weight:700;font-size:12px;">${unit?money(unit):'-'}</div></div>
+      </div></div>`;
+  }).join('');
+}
+
+function renderAnalysisWeekday() {
+  const wdStats=Array.from({length:7},()=>({sec:0,sales:0,count:0,days:new Set()}));
+  records.forEach(r=>{const dk=businessDayKey(r.start);const wd=new Date(dk+'T00:00:00').getDay();wdStats[wd].sec+=r.duration;wdStats[wd].days.add(dk);});
+  Object.entries(earnings).forEach(([dk,e])=>{
+    const wd=new Date(dk+'T00:00:00').getDay();
+    const total=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+    const cnt=Object.values(e.counts||{}).reduce((s,c)=>s+(c||0),0);
+    if(total>0||cnt>0){wdStats[wd].sales+=total;wdStats[wd].count+=cnt;}
+  });
+  const content=document.getElementById('analysis-weekday-content');
+  if(!content) return;
+  content.innerHTML=`<div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;overflow:hidden;">
+    <div style="display:grid;grid-template-columns:36px repeat(4,1fr);font-size:10px;font-weight:700;color:#6b7280;padding:6px 8px;background:#f9fafb;">
+      <span>曜日</span><span>平均売上</span><span>平均h</span><span>平均件数</span><span>稼働日数</span>
+    </div>
+    ${DAYS.map((day,wd)=>{
+      const s=wdStats[wd]; const n=s.days.size;
+      if(!n) return `<div style="display:grid;grid-template-columns:36px repeat(4,1fr);font-size:12px;padding:8px;border-bottom:1px solid #f0f0f0;color:#9ca3af;">
+        <span style="font-weight:700;">${day}</span><span>-</span><span>-</span><span>-</span><span>0</span></div>`;
+      return `<div style="display:grid;grid-template-columns:36px repeat(4,1fr);font-size:12px;padding:8px;border-bottom:1px solid #f0f0f0;">
+        <span style="font-weight:700;">${day}</span>
+        <span style="font-weight:700;">${money(Math.round(s.sales/n))}</span>
+        <span>${(s.sec/n/3600).toFixed(1)}</span>
+        <span>${(s.count/n).toFixed(1)}</span>
+        <span>${n}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
 
 function downloadCSV(filename, content) {
   const blob = new Blob(['﻿'+content], {type:'text/csv;charset=utf-8;'});
