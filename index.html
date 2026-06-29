@@ -546,6 +546,10 @@
   </div>
 
   <div id="view-active">
+    <!-- 稼働中カード（稼働中のみ表示・render() で生成） -->
+    <div id="active-area"></div>
+
+    <!-- 4枚スタットカード -->
     <div class="stats">
       <div class="stat">
         <div class="stat-label">今日の稼働</div>
@@ -553,11 +557,11 @@
         <div class="stat-sub" id="today-sub">-</div>
       </div>
       <div class="stat">
-        <div class="stat-label">今週の残り</div>
-        <div class="stat-value" id="week-remain">20:00</div>
-        <div class="stat-sub" id="week-sub">今週 0:00 使用</div>
+        <div class="stat-label" id="week-card-label">今週の残り</div>
+        <div class="stat-value" id="week-remain">-</div>
+        <div class="stat-sub" id="week-sub">-</div>
       </div>
-      <div class="stat">
+      <div class="stat" onclick="switchTab('sales')" style="cursor:pointer;">
         <div class="stat-label">今日の売上</div>
         <div class="stat-value" id="today-sales-val" style="color:var(--blue);">¥0</div>
         <div class="stat-sub" id="today-sales-sub">-</div>
@@ -568,25 +572,46 @@
         <div class="stat-sub">/ h</div>
       </div>
     </div>
-    <div id="active-area"></div>
-    <div class="sec-label">業者を選んで開始</div>
-    <div class="vendors">
-      <div class="vbtn" id="vbtn-uber" onclick="startDel('uber')">
-        <div class="vicon">🚴</div>
-        <div class="vname">Uber Eats</div>
-        <div class="vtime" id="vt-uber">0:00</div>
-      </div>
-      <div class="vbtn" id="vbtn-demae" onclick="startDel('demae')">
-        <div class="vicon">🛵</div>
-        <div class="vname">出前館</div>
-        <div class="vtime" id="vt-demae">0:00</div>
-      </div>
-      <div class="vbtn" id="vbtn-rocket" onclick="startDel('rocket')">
-        <div class="vicon">🚀</div>
-        <div class="vname">ロケットナウ</div>
-        <div class="vtime" id="vt-rocket">0:00</div>
+
+    <!-- 詳細折りたたみ -->
+    <div id="detail-toggle" onclick="toggleDetail()"
+         style="display:flex;align-items:center;justify-content:space-between;
+                padding:10px 14px;background:#f9fafb;border:1px solid #edf0f3;
+                border-radius:12px;cursor:pointer;margin-bottom:8px;font-size:13px;color:#374151;">
+      <span id="detail-toggle-label">▶ 詳細を見る</span>
+      <span style="font-size:11px;color:#9ca3af;">今月・昨日比・目標</span>
+    </div>
+    <div id="detail-panel" style="display:none;margin-bottom:10px;">
+      <div style="background:#f9fafb;border:1px solid #edf0f3;border-radius:12px;padding:14px;">
+        <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">今月の売上</div>
+        <div id="detail-monthly" style="font-size:24px;font-weight:900;color:#111;">¥0</div>
+        <div id="detail-monthly-sub" style="font-size:11px;color:#6b7280;margin-top:2px;margin-bottom:12px;">稼働 0日 0:00</div>
+        <div style="display:flex;gap:20px;margin-bottom:12px;">
+          <div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">昨日比</div>
+            <div id="detail-vs-yesterday" style="font-size:15px;font-weight:700;color:#6b7280;">-</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">先週同曜日比</div>
+            <div id="detail-vs-lastweek" style="font-size:15px;font-weight:700;color:#6b7280;">-</div>
+          </div>
+        </div>
+        <div id="detail-sales-bar-wrap" style="display:none;">
+          <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">週間目標売上</div>
+          <div style="background:#e5e7eb;border-radius:999px;height:8px;overflow:hidden;">
+            <div id="detail-sales-bar"
+                 style="height:100%;background:var(--green);border-radius:999px;width:0%;transition:width .3s;"></div>
+          </div>
+          <div id="detail-sales-bar-label" style="font-size:11px;color:#6b7280;margin-top:4px;"></div>
+        </div>
       </div>
     </div>
+
+    <!-- 業者ボタン -->
+    <div class="sec-label">業者を選んで開始</div>
+    <div class="vendors" id="vendor-grid"></div>
+
+    <!-- 今日のサマリー -->
     <div id="today-summary" onclick="switchTab('history')"
          style="text-align:center;font-size:12px;color:#6b7280;padding:10px;cursor:pointer;
                 background:#f9fafb;border-radius:10px;border:1px solid #edf0f3;margin-bottom:14px;">
