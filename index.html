@@ -628,6 +628,14 @@
 
   <div id="view-sales" style="display:none;">
 
+    <!-- 日付ナビ -->
+    <div class="week-nav" style="margin-bottom:10px;">
+      <button class="week-nav-btn" onclick="changeSalesDay(-1)"><span class="nav-arrow">‹</span><span>前日</span></button>
+      <button class="week-nav-btn current" onclick="resetSalesDay()"><span>今日</span></button>
+      <button class="week-nav-btn" onclick="changeSalesDay(1)"><span>翌日</span><span class="nav-arrow">›</span></button>
+    </div>
+    <div class="date-label" id="sales-day-label"></div>
+
     <!-- 現金収入ログ -->
     <div class="sec-label">
       💴 現金収入
@@ -649,6 +657,7 @@
     <div class="sec-label" style="margin-top:14px;">業者別時給</div>
     <div id="sales-hourly-area"></div>
 
+    <div id="sales-reset-area"></div>
     <div style="margin-bottom:80px;"></div>
   </div>
 
@@ -805,6 +814,7 @@ let active = null, activeStart = null;
 let records = [];
 let completing = false;
 let weekOffset = 0; // 0=今週, -1=先週 ...
+let salesDayOffset = 0; // 0=今日, -1=昨日 ...
 let currentTab = 'active';
 let editIdx = null;
 let syncStatus = 'none';
@@ -1325,6 +1335,21 @@ function changeWeek(delta) {
 function resetWeek() {
   weekOffset = 0;
   if (currentTab === 'history') renderHistory(); else render();
+}
+function changeSalesDay(delta) {
+  salesDayOffset += delta;
+  renderSalesTab();
+}
+function resetSalesDay() {
+  salesDayOffset = 0;
+  renderSalesTab();
+}
+function resetSalesDayData(dayKey) {
+  if (!confirm(dayKey + ' の売上・件数データをリセットしますか？\n（稼働記録は消えません）')) return;
+  delete earnings[dayKey];
+  saveLocalData();
+  if (cfg.gasUrl) scheduleEarningsSave(dayKey);
+  renderSalesTab();
 }
 
 function money(n) {
@@ -2016,9 +2041,17 @@ function recordItem(r) {
 
 function renderSalesTab() {
   const now = new Date();
-  const dayKey = businessDayKey(now);
+  const targetDate = new Date(now.getTime() + salesDayOffset * 86400000);
+  const dayKey = businessDayKey(targetDate);
   const dEarn = ensureDayEarnings(dayKey);
   const dayCounts = getDayCounts(dayKey);
+
+  // 日付ラベル更新
+  const dayLabel = document.getElementById('sales-day-label');
+  if (dayLabel) {
+    const suffix = salesDayOffset === 0 ? '（今日）' : salesDayOffset === -1 ? '（昨日）' : `（${Math.abs(salesDayOffset)}日${salesDayOffset < 0 ? '前' : '後'}）`;
+    dayLabel.textContent = targetDate.getFullYear() + '/' + (targetDate.getMonth()+1) + '/' + targetDate.getDate() + ' ' + suffix;
+  }
 
   // 現金ログ
   const cashList = getDayCash(dayKey);
@@ -2139,6 +2172,15 @@ function renderSalesTab() {
     hourlyArea.innerHTML = `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px;">${rows}</div>`;
   }
 
+  // リセットボタン
+  const resetArea = document.getElementById('sales-reset-area');
+  if (resetArea) {
+    resetArea.innerHTML = `<button onclick="resetSalesDayData('${dayKey}')"
+      style="width:100%;padding:10px;margin-top:8px;background:#fff;border:1px solid #fca5a5;
+             border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;color:#dc2626;">
+      🗑 この日の売上・件数をリセット
+    </button>`;
+  }
 }
 
 function render() {
