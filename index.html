@@ -338,6 +338,13 @@
       border-radius: 18px;
       box-shadow: 0 10px 22px rgba(34,197,94,.24);
     }
+    .htab {
+      flex: 1; padding: 8px 0;
+      background: #f3f4f6; border: 1px solid #e2e8f0;
+      border-radius: 8px; font-size: 13px; font-weight: 700;
+      cursor: pointer; color: #374151;
+    }
+    .htab.active { background: var(--green); color: #fff; border-color: var(--green); }
 
   </style>
 
@@ -646,21 +653,63 @@
   </div>
 
   <div id="view-history" style="display:none;">
-    <div class="date-label" id="week-range-label2"></div>
-    <div class="week-nav">
-      <button class="week-nav-btn" onclick="changeWeek(-1)"><span class="nav-arrow">‹</span><span>先週</span></button>
-      <button class="week-nav-btn current" onclick="resetWeek()"><span>今週</span></button>
-      <button class="week-nav-btn" onclick="changeWeek(1)"><span>翌週</span><span class="nav-arrow">›</span></button>
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
+      <button class="htab active" id="htab-daily" onclick="switchHistoryTab('daily')">日別</button>
+      <button class="htab" id="htab-weekly" onclick="switchHistoryTab('weekly')">週別</button>
+      <button class="htab" id="htab-monthly" onclick="switchHistoryTab('monthly')">月別</button>
     </div>
-    <div class="week-title">業者別合計</div>
-    <div id="week-vendor-summary" style="margin-bottom:1rem;"></div>
-    <div class="sec-label">日別明細</div>
-    <div id="week-detail"></div>
+
+    <div id="hview-daily">
+      <div class="week-nav">
+        <button class="week-nav-btn" onclick="changeWeek(-1)"><span class="nav-arrow">‹</span><span>先週</span></button>
+        <button class="week-nav-btn current" onclick="resetWeek()"><span>今週</span></button>
+        <button class="week-nav-btn" onclick="changeWeek(1)"><span>翌週</span><span class="nav-arrow">›</span></button>
+      </div>
+      <div class="date-label" id="history-week-label"></div>
+      <div id="history-daily-content"></div>
+      <button onclick="exportCSV('daily')"
+        style="margin-top:10px;width:100%;padding:10px;background:#f3f4f6;
+               border:1px solid #e2e8f0;border-radius:10px;font-size:13px;font-weight:700;
+               cursor:pointer;color:#374151;">📥 この週をCSV出力</button>
+    </div>
+
+    <div id="hview-weekly" style="display:none;">
+      <div id="history-weekly-content"></div>
+      <button onclick="exportCSV('weekly')"
+        style="margin-top:10px;width:100%;padding:10px;background:#f3f4f6;
+               border:1px solid #e2e8f0;border-radius:10px;font-size:13px;font-weight:700;
+               cursor:pointer;color:#374151;">📥 週別データをCSV出力</button>
+    </div>
+
+    <div id="hview-monthly" style="display:none;">
+      <div id="history-monthly-content"></div>
+      <button onclick="exportCSV('monthly')"
+        style="margin-top:10px;width:100%;padding:10px;background:#f3f4f6;
+               border:1px solid #e2e8f0;border-radius:10px;font-size:13px;font-weight:700;
+               cursor:pointer;color:#374151;">📥 月別データをCSV出力</button>
+    </div>
+
+    <button onclick="exportCSV('all')"
+      style="margin-top:8px;width:100%;padding:10px;background:#ecfdf5;
+             border:1px solid #a7f3d0;border-radius:10px;font-size:13px;font-weight:700;
+             cursor:pointer;color:#065f46;">📥 全記録CSV出力（確定申告用）</button>
+    <div style="margin-bottom:80px;"></div>
   </div>
 
   <div id="view-analysis" style="display:none;">
-    <div class="sec-label">分析</div>
-    <div id="analysis-placeholder"></div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
+      <button class="htab active" id="atab-monthly" onclick="switchAnalysisTab('monthly')">月次</button>
+      <button class="htab" id="atab-vendor" onclick="switchAnalysisTab('vendor')">業者別</button>
+      <button class="htab" id="atab-weekday" onclick="switchAnalysisTab('weekday')">曜日別</button>
+    </div>
+    <div id="aview-monthly"><div id="analysis-monthly-content"></div></div>
+    <div id="aview-vendor" style="display:none;"><div id="analysis-vendor-content"></div></div>
+    <div id="aview-weekday" style="display:none;"><div id="analysis-weekday-content"></div></div>
+    <div style="margin-top:16px;padding:12px;background:#f9fafb;border:1px solid #edf0f3;
+                border-radius:12px;text-align:center;color:#9ca3af;font-size:12px;">
+      📊 グラフ表示は Ver2 で対応予定
+    </div>
+    <div style="margin-bottom:80px;"></div>
   </div>
 
   <div class="bottom-tab-bar">
@@ -905,8 +954,182 @@ function switchTab(tab) {
   else render();
 }
 
-function renderHistory() { }
+let currentHistoryTab = 'daily';
+
+function switchHistoryTab(tab) {
+  currentHistoryTab = tab;
+  ['daily','weekly','monthly'].forEach(t => {
+    const btn = document.getElementById('htab-'+t);
+    if (btn) btn.className = 'htab'+(t===tab?' active':'');
+    const view = document.getElementById('hview-'+t);
+    if (view) view.style.display = t===tab ? 'block' : 'none';
+  });
+  renderHistory();
+}
+
+function renderHistory() {
+  if (currentHistoryTab==='daily') renderHistoryDaily();
+  else if (currentHistoryTab==='weekly') renderHistoryWeekly();
+  else renderHistoryMonthly();
+}
+
+function renderHistoryDaily() {
+  const now = new Date();
+  const {start:ws,end:we} = getWeekRangeWithOffset(now, weekOffset);
+  const label = document.getElementById('history-week-label');
+  const suffix = weekOffset!==0 ? `（${Math.abs(weekOffset)}週${weekOffset<0?'前':'後'}）` : '';
+  if (label) label.textContent = dateStr(ws)+' 〜 '+dateStr(we)+suffix;
+
+  const weekRecs = records.filter(r => r.start>=ws && r.start<=we);
+  const byDay = {};
+  weekRecs.forEach(r => {
+    const dk = businessDayKey(r.start);
+    if (!byDay[dk]) byDay[dk] = {key:dk, items:[]};
+    byDay[dk].items.push(r);
+  });
+  const byV = {};
+  weekRecs.forEach(r => { byV[r.vendor]=(byV[r.vendor]||0)+r.duration; });
+  const wTotal = Object.values(byV).reduce((s,v)=>s+v,0);
+
+  let summaryHtml = '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px;margin-bottom:10px;">';
+  summaryHtml += '<div style="font-size:12px;font-weight:800;color:#0369a1;margin-bottom:6px;">週間サマリー</div>';
+  getEnabledVendors().filter(v=>byV[v]).forEach(v => {
+    summaryHtml += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;">
+      <span style="display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${V[v].color};display:inline-block;"></span>${V[v].name}
+      </span><span>${fmt(byV[v])}</span></div>`;
+  });
+  summaryHtml += `<div style="display:flex;justify-content:space-between;padding:6px 0 0;font-size:13px;font-weight:800;"><span>合計</span><span>${fmt(wTotal)}</span></div></div>`;
+
+  const content = document.getElementById('history-daily-content');
+  if (!content) return;
+  const dayHtml = Object.values(byDay).sort((a,b)=>a.key<b.key?1:-1)
+    .map(day=>buildDayGroup(day,{collapsible:true})).join('');
+  content.innerHTML = summaryHtml + (dayHtml||'<div class="empty">この週の記録がありません</div>');
+}
+
+function renderHistoryWeekly() {
+  const weeks = {};
+  records.forEach(r => {
+    const {start:ws} = getWeekRange(r.start);
+    const wk = toDateInput(ws);
+    if (!weeks[wk]) weeks[wk] = {start:ws, sec:0, sales:0, count:0, days:new Set()};
+    weeks[wk].sec += r.duration;
+    weeks[wk].days.add(businessDayKey(r.start));
+  });
+  Object.entries(earnings).forEach(([dk,e]) => {
+    const dt = new Date(dk+'T'+String(DAY_CUTOFF_HOUR).padStart(2,'0')+':00:00');
+    const {start:ws} = getWeekRange(dt);
+    const wk = toDateInput(ws);
+    if (!weeks[wk]) return;
+    weeks[wk].sales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+    Object.values(e.counts||{}).forEach(c=>{weeks[wk].count+=(c||0);});
+  });
+  const content = document.getElementById('history-weekly-content');
+  if (!content) return;
+  const sorted = Object.entries(weeks).sort((a,b)=>b[0]>a[0]?1:-1);
+  if (!sorted.length) { content.innerHTML='<div class="empty">記録がありません</div>'; return; }
+  content.innerHTML = sorted.map(([wk,w]) => {
+    const {end:we} = getWeekRange(w.start);
+    const h = w.sec/3600;
+    const hourly = w.sec>0 ? Math.round(w.sales/h) : null;
+    return `<div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:800;color:#374151;margin-bottom:6px;">${dateStr(w.start)} 〜 ${dateStr(new Date(we.getTime()-1))}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+        <div><div style="font-size:10px;color:#6b7280;">稼働</div><div style="font-weight:700;font-size:13px;">${fmt(w.sec)}</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">日数</div><div style="font-weight:700;font-size:13px;">${w.days.size}日</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">売上</div><div style="font-weight:700;font-size:13px;">${money(w.sales)}</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">時給</div><div style="font-weight:700;font-size:13px;">${hourly?money(hourly):'-'}</div></div>
+      </div></div>`;
+  }).join('');
+}
+
+function renderHistoryMonthly() {
+  const months = {};
+  records.forEach(r => {
+    const mk = businessDayKey(r.start).slice(0,7);
+    if (!months[mk]) months[mk]={sec:0,sales:0,count:0,days:new Set()};
+    months[mk].sec+=r.duration; months[mk].days.add(businessDayKey(r.start));
+  });
+  Object.entries(earnings).forEach(([dk,e]) => {
+    const mk=dk.slice(0,7);
+    if (!months[mk]) return;
+    months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+    Object.values(e.counts||{}).forEach(c=>{months[mk].count+=(c||0);});
+  });
+  const content = document.getElementById('history-monthly-content');
+  if (!content) return;
+  const sorted = Object.entries(months).sort((a,b)=>b[0]>a[0]?1:-1);
+  if (!sorted.length) { content.innerHTML='<div class="empty">記録がありません</div>'; return; }
+  content.innerHTML = sorted.map(([mk,m]) => {
+    const [y,mo] = mk.split('-');
+    const h=m.sec/3600;
+    const hourly=m.sec>0?Math.round(m.sales/h):null;
+    return `<div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:800;color:#374151;margin-bottom:6px;">${y}年${parseInt(mo)}月</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+        <div><div style="font-size:10px;color:#6b7280;">稼働</div><div style="font-weight:700;font-size:13px;">${fmt(m.sec)}</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">稼働日</div><div style="font-weight:700;font-size:13px;">${m.days.size}日</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">売上</div><div style="font-weight:700;font-size:13px;">${money(m.sales)}</div></div>
+        <div><div style="font-size:10px;color:#6b7280;">時給</div><div style="font-weight:700;font-size:13px;">${hourly?money(hourly):'-'}</div></div>
+      </div></div>`;
+  }).join('');
+}
+
 function renderAnalysis() { }
+
+function downloadCSV(filename, content) {
+  const blob = new Blob(['﻿'+content], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV(type) {
+  const now = new Date();
+  if (type === 'daily') {
+    const {start:ws,end:we} = getWeekRangeWithOffset(now, weekOffset);
+    const weekRecs = records.filter(r=>r.start>=ws&&r.start<=we);
+    const byDay = {};
+    weekRecs.forEach(r=>{const dk=businessDayKey(r.start);if(!byDay[dk])byDay[dk]={sec:0,sales:0,count:0};byDay[dk].sec+=r.duration;});
+    Object.entries(earnings).forEach(([dk,e])=>{
+      if(!byDay[dk])return;
+      byDay[dk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+      Object.values(e.counts||{}).forEach(c=>{byDay[dk].count+=(c||0);});
+    });
+    const header='日付,稼働時間(h),件数,売上(円),時給(円/h)';
+    const rows=Object.entries(byDay).sort().map(([dk,d])=>{
+      const h=d.sec/3600; const hourly=d.sec>0?Math.round(d.sales/h):0;
+      return [dk,h.toFixed(2),d.count,d.sales,hourly].join(',');
+    });
+    downloadCSV('derilog_日別_'+toDateInput(ws).slice(0,7).replace('-','')+'.csv',[header,...rows].join('\n'));
+
+  } else if (type === 'weekly') {
+    const weeks={};
+    records.forEach(r=>{const{start:ws}=getWeekRange(r.start);const wk=toDateInput(ws);if(!weeks[wk])weeks[wk]={start:ws,sec:0,sales:0,count:0,days:new Set()};weeks[wk].sec+=r.duration;weeks[wk].days.add(businessDayKey(r.start));});
+    Object.entries(earnings).forEach(([dk,e])=>{const dt=new Date(dk+'T'+String(DAY_CUTOFF_HOUR).padStart(2,'0')+':00:00');const{start:ws}=getWeekRange(dt);const wk=toDateInput(ws);if(!weeks[wk])return;weeks[wk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));Object.values(e.counts||{}).forEach(c=>{weeks[wk].count+=(c||0);});});
+    const header='週開始日,稼働時間(h),稼働日数,件数,売上(円),時給(円/h)';
+    const rows=Object.entries(weeks).sort().map(([wk,w])=>{const h=w.sec/3600;const hourly=w.sec>0?Math.round(w.sales/h):0;return[wk,h.toFixed(2),w.days.size,w.count,w.sales,hourly].join(',');});
+    downloadCSV('derilog_週別.csv',[header,...rows].join('\n'));
+
+  } else if (type === 'monthly') {
+    const months={};
+    records.forEach(r=>{const mk=businessDayKey(r.start).slice(0,7);if(!months[mk])months[mk]={sec:0,sales:0,count:0,days:new Set()};months[mk].sec+=r.duration;months[mk].days.add(businessDayKey(r.start));});
+    Object.entries(earnings).forEach(([dk,e])=>{const mk=dk.slice(0,7);if(!months[mk])return;months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));Object.values(e.counts||{}).forEach(c=>{months[mk].count+=(c||0);});});
+    const header='年月,稼働時間(h),稼働日数,件数,売上(円),時給(円/h)';
+    const rows=Object.entries(months).sort().map(([mk,m])=>{const h=m.sec/3600;const hourly=m.sec>0?Math.round(m.sales/h):0;return[mk,h.toFixed(2),m.days.size,m.count,m.sales,hourly].join(',');});
+    downloadCSV('derilog_月別.csv',[header,...rows].join('\n'));
+
+  } else if (type === 'all') {
+    const header='日付,開始時刻,終了時刻,業者,稼働時間(h),手動入力';
+    const rows=records.slice().sort((a,b)=>a.start-b.start).map(r=>[
+      businessDayKey(r.start),tStr(r.start),tStr(r.end),
+      V[r.vendor]?.name||r.vendor,(r.duration/3600).toFixed(2),r.manual?'手動':''
+    ].join(','));
+    downloadCSV('derilog_全記録.csv',[header,...rows].join('\n'));
+  }
+}
 
 function toggleDetail() {
   const panel = document.getElementById('detail-panel');
