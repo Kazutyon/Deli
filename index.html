@@ -114,7 +114,6 @@
       box-shadow: 0 5px 14px rgba(34,197,94,.12);
     }
     .hbtn.add::before{content:"+";font-size:32px;line-height:1;font-weight:300;margin-top:-3px;}
-    .hbtn.mail::before{content:"✉";font-size:20px;line-height:1;}
     .hbtn.settings::before{content:"⚙";font-size:20px;line-height:1;}
     .hbtn.logout::before{content:"⏻";font-size:19px;line-height:1;}
     .sync-bar {
@@ -354,7 +353,7 @@
     .hbtn { width: 34px; height: 34px; }
     .hbtn.add { width: 39px; height: 39px; }
     .hbtn.add::before { font-size: 31px; }
-    .hbtn.mail::before, .hbtn.settings::before { font-size: 19px; }
+    .hbtn.settings::before { font-size: 19px; }
     .sync-bar { margin-bottom: 12px; padding: 10px 12px; font-size: 12.5px; border-radius: 10px; }
     .tab-bar { margin-bottom: 9px; border-radius: 9px; }
     .tab { padding: 10px 6px; font-size: 13px; }
@@ -470,7 +469,6 @@
     </div>
     <div class="header-btns">
       <button class="hbtn add" onclick="openModal(null)" title="追加" aria-label="追加"></button>
-      <button class="hbtn mail" onclick="openMailModal()" title="メール" aria-label="メール"></button>
       <button class="hbtn settings" onclick="toggleSettings()" title="設定" aria-label="設定"></button>
       <button class="hbtn logout" onclick="doLogout()" title="ログアウト" aria-label="ログアウト"></button>
     </div>
@@ -597,8 +595,6 @@
     <div id="week-vendor-summary" style="margin-bottom:1rem;"></div>
     <div class="sec-label">日別明細</div>
     <div id="week-detail"></div>
-    <div class="sec-label" style="margin-top:20px;">認定日集計（ハローワーク用）</div>
-    <div id="nintei-section"></div>
   </div>
 
   <div id="view-all" style="display:none;">
@@ -622,21 +618,6 @@
   </div>
 </div>
 
-<div id="mail-modal" style="display:none;">
-  <div class="modal-bg" onclick="closeMailModal()">
-    <div class="modal" onclick="event.stopPropagation()">
-      <div class="modal-title">メールを送る</div>
-      <div class="form-row">
-        <div class="form-label">送る週を選択</div>
-        <select id="mail-week-select"></select>
-      </div>
-      <div class="form-btns">
-        <button class="btn-cancel" onclick="closeMailModal()">キャンセル</button>
-        <button class="btn-save" onclick="sendMailWithOffset()">送信</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <div id="modal" style="display:none;">
   <div class="modal-bg" onclick="closeModal()">
@@ -1632,20 +1613,6 @@ function renderSalesTab() {
     hourlyArea.innerHTML = `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px;">${rows}</div>`;
   }
 
-  // 送信済みフラグの反映
-  const sendBtn = document.getElementById('send-btn');
-  const sendStatus = document.getElementById('send-status');
-  const sentAt = getDaySentAt(dayKey);
-  if (sendBtn && sentAt) {
-    sendBtn.textContent = '再送信する（上書き）';
-    sendBtn.style.background = 'linear-gradient(135deg,#6b7280,#4b5563)';
-    const sentLabel = typeof sentAt === 'string' ? ' ' + sentAt : '';
-    if (sendStatus) sendStatus.textContent = '✅ 送信済み' + sentLabel;
-  } else if (sendBtn) {
-    sendBtn.textContent = '今日の記録をシートへ送信';
-    sendBtn.style.background = 'linear-gradient(135deg,#21a85b,#159447)';
-    if (sendStatus) sendStatus.textContent = '';
-  }
 }
 
 function render() {
