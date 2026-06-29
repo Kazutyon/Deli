@@ -1799,8 +1799,9 @@ function render() {
 
   // 今日の売上合計・時給・サマリー
   const dEarn = ensureDayEarnings(todayKey);
-  const todaySalesTotal = (dEarn.uber || 0) + (dEarn.demae || 0)
-    + (dEarn.rocket?.delivery || 0) + (dEarn.rocket?.quest || 0);
+  const todayCash = getDayCash(todayKey).reduce((s,e) => s+e.amount, 0);
+  const todaySalesTotal = (dEarn.uber||0)+(dEarn.demae||0)
+    +(dEarn.rocket?.delivery||0)+(dEarn.rocket?.quest||0)+todayCash;
   const el_sales = document.getElementById('today-sales-val');
   const el_salesSub = document.getElementById('today-sales-sub');
   if (el_sales) el_sales.textContent = money(todaySalesTotal);
@@ -1835,16 +1836,6 @@ function render() {
     document.getElementById('week-remain').textContent = fmt(weekSec);
     document.getElementById('week-sub').textContent = '今週の累計稼働';
   }
-  const wrl=dateStr(ws)+' 〜 '+dateStr(we);
-  const weekRangeLabel = document.getElementById('week-range-label');
-  if (weekRangeLabel) weekRangeLabel.textContent=wrl;
-  const { start:ws2, end:we2 } = getWeekRangeWithOffset(now, weekOffset);
-  const wrl2=dateStr(ws2)+' 〜 '+dateStr(we2);
-  let weekSuffix = '';
-  if (weekOffset !== 0) {
-    weekSuffix = `（${weekOffset < 0 ? Math.abs(weekOffset) + '週前' : weekOffset + '週後'}）`;
-  }
-  document.getElementById('week-range-label2').textContent = wrl2 + weekSuffix;
 
   const aa=document.getElementById('active-area');
   if(active&&activeStart){
