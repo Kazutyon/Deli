@@ -812,6 +812,7 @@ function loadData() {
     });
     const gasEl = document.getElementById('gas-url');
     if (gasEl) gasEl.value = cfg.gasUrl || '';
+    renderVendorGrid();
   } catch(e) {}
 }
 
@@ -855,6 +856,24 @@ function saveSettings() {
 
 function getEnabledVendors() {
   return Object.keys(V).filter(v => (cfg.enabledVendors || ['uber','demae','rocket']).includes(v));
+}
+
+const VENDOR_ICONS = { uber: '🚴', demae: '🛵', rocket: '🚀' };
+
+function renderVendorGrid() {
+  const grid = document.getElementById('vendor-grid');
+  if (!grid) return;
+  const enabled = getEnabledVendors();
+  const cols = enabled.length === 2 ? 'repeat(2,1fr)'
+             : enabled.length === 3 ? 'repeat(3,1fr)'
+             : 'repeat(2,1fr)';
+  grid.style.gridTemplateColumns = cols;
+  grid.innerHTML = enabled.map(v => `
+    <div class="vbtn" id="vbtn-${v}" onclick="startDel('${v}')">
+      <div class="vicon">${VENDOR_ICONS[v]}</div>
+      <div class="vname">${V[v].name}</div>
+      <div class="vtime" id="vt-${v}">0:00</div>
+    </div>`).join('');
 }
 
 function toggleSettings() {
@@ -1572,10 +1591,25 @@ async function saveRecord() {
 
 function startDel(v) {
   if (completing) return;
-  if (active) return; // 稼働中は誤操作防止（完了ボタンで終了）
+  if (!getEnabledVendors().includes(v)) return;
+  if (active && active !== v) {
+    if (!confirm(V[active].name+' を完了して、'+V[v].name+' を開始しますか？')) return;
+    const end = new Date();
+    const clientId = 'local-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+    const currentVendor = active;
+    const rec = { clientId, vendor: currentVendor, start: new Date(activeStart), end,
+                  duration: Math.floor((end-activeStart)/1000), pending: !!cfg.gasUrl };
+    records.push(rec);
+    records.sort((a,b) => a.start-b.start);
+    if (cfg.gasUrl) {
+      postToGAS({ clientId, service: V[currentVendor].name,
+                  start: rec.start.toISOString(), end: end.toISOString() })
+        .then(() => setTimeout(syncFromGAS, 1500));
+    }
+    active = null; activeStart = null;
+  }
+  if (active) return;
   active = v; activeStart = new Date();
-  ['uber','demae','rocket'].forEach(x => document.getElementById('vbtn-'+x).className='vbtn');
-  document.getElementById('vbtn-'+v).className='vbtn active-'+v;
   saveLocalData(); render();
 }
 
@@ -1614,7 +1648,10 @@ async function completeDel() {
       setTimeout(syncFromGAS, 1500);
     }
 
-    ['uber','demae','rocket'].forEach(x => document.getElementById('vbtn-'+x).className='vbtn');
+    getEnabledVendors().forEach(x => {
+      const el = document.getElementById('vbtn-'+x);
+      if (el) el.className = 'vbtn';
+    });
     active = null; activeStart = null;
     saveLocalData(); render();
   } finally {
@@ -1795,7 +1832,13 @@ function render() {
   document.getElementById('today-val').textContent=fmt(todaySec);
   const parts=Object.keys(byV).filter(v=>byV[v]>0).map(v=>V[v].name.replace('Uber Eats','Uber')+' '+fmt(byV[v]));
   document.getElementById('today-sub').textContent=parts.join(' / ')||'-';
-  Object.keys(V).forEach(v=>{document.getElementById('vt-'+v).textContent=fmt(byV[v]||0);});
+  getEnabledVendors().forEach(x => {
+    const el = document.getElementById('vbtn-'+x);
+    if (!el) return;
+    el.className = 'vbtn' + (x === active ? ' active-'+x : '') + (active && x !== active ? ' disabled' : '');
+    const vtEl = document.getElementById('vt-'+x);
+    if (vtEl) vtEl.textContent = fmt(byV[x]||0);
+  });
 
   // 今日の売上合計・時給・サマリー
   const dEarn = ensureDayEarnings(todayKey);
@@ -1853,15 +1896,6 @@ function render() {
       </div>
     </div></div>`;
   } else {aa.innerHTML='';}
-
-  // 稼働中は開始ボタン誤操作を防ぐ
-  ['uber','demae','rocket'].forEach(x => {
-    const el = document.getElementById('vbtn-'+x);
-    if (!el) return;
-    if (active) el.classList.add('disabled');
-    else el.classList.remove('disabled');
-  });
-
 
   if (currentTab === 'sales') renderSalesTab();
 }
