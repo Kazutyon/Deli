@@ -1464,24 +1464,19 @@ function getVendorWorkSeconds(dayKey, vendor) {
 }
 
 function updateSyncBar() {
+  const bar = document.getElementById('sync-bar');
+  if (!cfg.gasUrl) {
+    if (bar) bar.style.display = 'none';
+    return;
+  }
+  if (bar) bar.style.display = '';
   const dot = document.getElementById('sync-dot');
   const msg = document.getElementById('sync-msg');
-  if (!cfg.gasUrl) {
-    dot.className = 'sync-dot none';
-    msg.textContent = 'GAS URL未設定（ローカル保存中）';
-  } else if (syncStatus === 'ok') {
-    dot.className = 'sync-dot ok';
-    msg.textContent = 'Google Sheetsと同期中';
-  } else if (syncStatus === 'ing') {
-    dot.className = 'sync-dot ing';
-    msg.textContent = '同期中...';
-  } else if (syncStatus === 'err') {
-    dot.className = 'sync-dot err';
-    msg.textContent = '同期エラー（ローカル保存中）';
-  } else {
-    dot.className = 'sync-dot none';
-    msg.textContent = 'GAS設定済み（未同期）';
-  }
+  if (!dot || !msg) return;
+  if (syncStatus === 'ok') { dot.className='sync-dot ok'; msg.textContent='✓ 同期済み'; }
+  else if (syncStatus === 'ing') { dot.className='sync-dot ing'; msg.textContent='同期中...'; }
+  else if (syncStatus === 'err') { dot.className='sync-dot err'; msg.textContent='同期エラー（ローカル保存中）'; }
+  else { dot.className='sync-dot none'; msg.textContent='GAS設定済み（未同期）'; }
 }
 
 
