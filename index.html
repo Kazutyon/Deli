@@ -1824,9 +1824,17 @@ function render() {
   const {start:ws,end:we}=getWeekRange(now);
   const weekRecs=records.filter(r=>r.start>=ws&&r.start<=we);
   const weekSec=weekRecs.reduce((s,r)=>s+r.duration,0)+(active&&activeStart>=ws?elapsed:0);
-  const maxSec=cfg.weekMax*3600;
-  document.getElementById('week-remain').textContent=fmt(Math.max(0,maxSec-weekSec));
-  document.getElementById('week-sub').textContent='今週 '+fmt(weekSec)+' / '+cfg.weekMax+'h使用';
+  const weekCardLabel = document.getElementById('week-card-label');
+  if (cfg.weeklyTargetHours) {
+    const maxSec = cfg.weeklyTargetHours * 3600;
+    if (weekCardLabel) weekCardLabel.textContent = '今週の残り';
+    document.getElementById('week-remain').textContent = fmt(Math.max(0, maxSec-weekSec));
+    document.getElementById('week-sub').textContent = '今週 '+fmt(weekSec)+' / '+cfg.weeklyTargetHours+'h';
+  } else {
+    if (weekCardLabel) weekCardLabel.textContent = '今週の合計';
+    document.getElementById('week-remain').textContent = fmt(weekSec);
+    document.getElementById('week-sub').textContent = '今週の累計稼働';
+  }
   const wrl=dateStr(ws)+' 〜 '+dateStr(we);
   const weekRangeLabel = document.getElementById('week-range-label');
   if (weekRangeLabel) weekRangeLabel.textContent=wrl;
