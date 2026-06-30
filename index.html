@@ -519,6 +519,15 @@
         </div>
       </div>
 
+      <div class="setting-row" style="margin-top:16px;border-top:1px solid #fecaca;padding-top:12px;">
+        <button onclick="doDeleteAccount()"
+          style="width:100%;padding:10px;background:#fef2f2;color:#dc2626;
+                 border:1px solid #fecaca;border-radius:8px;font-size:13px;
+                 font-weight:700;cursor:pointer;">
+          🗑️ アカウントを削除
+        </button>
+      </div>
+
     </div>
   </div>
 
@@ -796,71 +805,276 @@ let syncStatus = 'none';
 let earnings = {}; // dayKey -> { uber:number, demae:number, rocket:{delivery:number, quest:number}, cashLog:[], counts:{}, sentAt:string|false }
 let collapsedDays = {};
 
-function loadData() {
-  try {
-    const c = localStorage.getItem('fdc_cfg');
-    if (c) {
-      const saved = JSON.parse(c);
-      cfg = Object.assign(cfg, saved);
-      // weekMax → weeklyTargetHours 移行
-      if (typeof cfg.weekMax === 'number' && cfg.weeklyTargetHours === null) {
-        cfg.weeklyTargetHours = cfg.weekMax > 0 ? cfg.weekMax : null;
-        delete cfg.weekMax;
-      }
-      // 個人用 GAS URL を除去
-      if (cfg.gasUrl && cfg.gasUrl.includes('AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn')) {
-        cfg.gasUrl = '';
-      }
-      if (!Array.isArray(cfg.enabledVendors)) cfg.enabledVendors = ['uber','demae','rocket'];
-    }
-    const r = localStorage.getItem('fdc_records');
-    if (r) records = JSON.parse(r).map(x => ({ ...x, start: new Date(x.start), end: new Date(x.end) }));
-    const e = localStorage.getItem('fdc_earnings');
-    if (e) earnings = JSON.parse(e) || {};
-    const legacyCash = JSON.parse(localStorage.getItem('fdc_cash') || '{}');
-    const legacyCounts = JSON.parse(localStorage.getItem('fdc_counts') || '{}');
-    const legacySent = JSON.parse(localStorage.getItem('fdc_sent') || '{}');
-    const a = localStorage.getItem('fdc_active');
-    if (a) { const ad = JSON.parse(a); active = ad.vendor; activeStart = new Date(ad.start); }
-    const dayKeys = new Set([
-      ...Object.keys(earnings || {}),
-      ...Object.keys(legacyCash || {}),
-      ...Object.keys(legacyCounts || {}),
-      ...Object.keys(legacySent || {})
-    ]);
-    dayKeys.forEach(dayKey => {
-      const day = ensureDayEarnings(dayKey);
-      if (!Array.isArray(day.cashLog) && Array.isArray(legacyCash[dayKey])) day.cashLog = legacyCash[dayKey];
-      if (!day.counts && legacyCounts[dayKey]) day.counts = legacyCounts[dayKey];
-      if ((typeof day.sentAt === 'undefined' || day.sentAt === null) && legacySent[dayKey]) day.sentAt = legacySent[dayKey];
-    });
-    const wsEl = document.getElementById('week-start');
-    if (wsEl) wsEl.value = cfg.weekStart;
-    const wthEl = document.getElementById('weekly-target-hours');
-    if (wthEl) wthEl.value = cfg.weeklyTargetHours !== null && cfg.weeklyTargetHours !== undefined ? cfg.weeklyTargetHours : '';
-    const wstEl = document.getElementById('weekly-sales-target');
-    if (wstEl) wstEl.value = cfg.weeklySalesTarget !== null && cfg.weeklySalesTarget !== undefined ? cfg.weeklySalesTarget : '';
-    ['uber','demae','rocket'].forEach(v => {
-      const el = document.getElementById('chk-vendor-' + v);
-      if (el) el.checked = (cfg.enabledVendors || ['uber','demae','rocket']).includes(v);
-    });
-    const gasEl = document.getElementById('gas-url');
-    if (gasEl) gasEl.value = cfg.gasUrl || '';
-    renderVendorGrid();
-  } catch(e) {}
-}
+// ===== DataService =====
+window.DS = (function() {
+  let _mode = 'guest';  // 'guest' | 'firestore'
+  let _uid  = null;
+  let _db   = null;
 
-function saveLocalData() {
-  try {
-    localStorage.setItem('fdc_cfg', JSON.stringify(cfg));
-    localStorage.setItem('fdc_records', JSON.stringify(records));
-    localStorage.setItem('fdc_earnings', JSON.stringify(earnings));
-    localStorage.removeItem('fdc_cash');
-    localStorage.removeItem('fdc_counts');
-    localStorage.removeItem('fdc_sent');
-    if (active) localStorage.setItem('fdc_active', JSON.stringify({ vendor: active, start: activeStart }));
-    else localStorage.removeItem('fdc_active');
-  } catch(e) {}
+  function _userRef() { return _db.collection('users').doc(_uid); }
+  function _recCol()  { return _userRef().collection('records'); }
+  function _ernCol()  { return _userRef().collection('earnings'); }
+
+  // Date オブジェクト → ISO 文字列（保存用）
+  function _recToStore(r) {
+    return {
+      id:       r.id || r.clientId || (Date.now()+'_'+Math.random().toString(36).slice(2,8)),
+      clientId: r.clientId || r.id || '',
+      vendor:   r.vendor,
+      start:    r.start instanceof Date ? r.start.toISOString() : r.start,
+      end:      r.end   instanceof Date ? r.end.toISOString()   : r.end,
+      duration: r.duration || 0,
+      manual:   r.manual || false,
+      pending:  r.pending || false
+    };
+  }
+
+  // ISO 文字列 → Date オブジェクト（読み込み用）
+  function _recFromStore(r) {
+    return { ...r, start: new Date(r.start), end: new Date(r.end) };
+  }
+
+  return {
+    mode() { return _mode; },
+
+    // user: Firebase User | null
+    async init(user) {
+      _mode = user ? 'firestore' : 'guest';
+      _uid  = user ? user.uid : null;
+      _db   = user ? firebase.firestore() : null;
+
+      // メモリ上のデータをリセット
+      records  = [];
+      earnings = {};
+      active   = null; activeStart = null;
+      try { localStorage.removeItem('fdc_active'); } catch(e) {}
+
+      // データ読み込み
+      try {
+        cfg      = await this.loadCfg();
+        records  = await this.loadRecords();
+        earnings = await this.loadEarnings();
+        // fdc_active（タイマー）は常に localStorage から
+        const a = localStorage.getItem('fdc_active');
+        if (a) { const ad = JSON.parse(a); active = ad.vendor; activeStart = new Date(ad.start); }
+      } catch(e) { console.error('[DS.init] load error:', e); }
+
+      // 設定パネルの UI を更新
+      _applyConfigToUI();
+    },
+
+    // ── 読み込み ──────────────────────────────────────────────────
+    async loadCfg() {
+      if (_mode === 'guest') {
+        const c = localStorage.getItem('fdc_cfg');
+        const saved = c ? JSON.parse(c) : {};
+        const base = {
+          weekStart: 1, weeklyTargetHours: null, weeklySalesTarget: null,
+          enabledVendors: ['uber','demae','rocket'], gasUrl: '', devMode: false
+        };
+        const merged = Object.assign(base, saved);
+        // 移行処理
+        if (typeof merged.weekMax === 'number' && merged.weeklyTargetHours === null) {
+          merged.weeklyTargetHours = merged.weekMax > 0 ? merged.weekMax : null;
+          delete merged.weekMax;
+        }
+        if (merged.gasUrl && merged.gasUrl.includes('AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn')) merged.gasUrl = '';
+        if (!Array.isArray(merged.enabledVendors)) merged.enabledVendors = ['uber','demae','rocket'];
+        return merged;
+      } else {
+        const snap = await _userRef().get();
+        if (!snap.exists) return cfg; // 初回: デフォルト値を返す
+        const data = snap.data();
+        return {
+          weekStart:          data.weekStart          ?? 1,
+          weeklyTargetHours:  data.weeklyTargetHours  ?? null,
+          weeklySalesTarget:  data.weeklySalesTarget  ?? null,
+          enabledVendors:     data.enabledVendors     ?? ['uber','demae','rocket'],
+          gasUrl:             data.gasUrl             ?? '',
+          devMode:            data.devMode            ?? false
+        };
+      }
+    },
+
+    async loadRecords() {
+      if (_mode === 'guest') {
+        const r = localStorage.getItem('fdc_records');
+        if (!r) return [];
+        return JSON.parse(r).map(_recFromStore);
+      } else {
+        const snap = await _recCol().orderBy('start').get();
+        return snap.docs.map(d => _recFromStore(d.data()));
+      }
+    },
+
+    async loadEarnings() {
+      if (_mode === 'guest') {
+        const e = localStorage.getItem('fdc_earnings');
+        const base = e ? JSON.parse(e) : {};
+        // legacy キーをマージ
+        const legacyCash   = JSON.parse(localStorage.getItem('fdc_cash')   || '{}');
+        const legacyCounts = JSON.parse(localStorage.getItem('fdc_counts') || '{}');
+        const legacySent   = JSON.parse(localStorage.getItem('fdc_sent')   || '{}');
+        const dayKeys = new Set([
+          ...Object.keys(base),
+          ...Object.keys(legacyCash),
+          ...Object.keys(legacyCounts),
+          ...Object.keys(legacySent)
+        ]);
+        dayKeys.forEach(dk => {
+          if (!base[dk]) base[dk] = {};
+          const d = base[dk];
+          if (!Array.isArray(d.cashLog) && Array.isArray(legacyCash[dk])) d.cashLog = legacyCash[dk];
+          if (!d.counts && legacyCounts[dk]) d.counts = legacyCounts[dk];
+          if ((typeof d.sentAt === 'undefined' || d.sentAt === null) && legacySent[dk]) d.sentAt = legacySent[dk];
+        });
+        return base;
+      } else {
+        const snap = await _ernCol().get();
+        const result = {};
+        snap.docs.forEach(d => { result[d.id] = d.data(); });
+        return result;
+      }
+    },
+
+    // ── イベント単位書き込み ──────────────────────────────────────
+    async upsertRecord(record) {
+      const stored = _recToStore(record);
+      // id を record に書き戻し（新規生成された場合）
+      record.id = stored.id;
+      if (_mode === 'guest') {
+        const idx = records.findIndex(r => (r.id || r.clientId) === stored.id);
+        if (idx >= 0) records[idx] = { ...records[idx], ...record };
+        // records 配列は呼び出し元が既に更新済みなのでここでは localStorage のみ更新
+        try {
+          localStorage.setItem('fdc_records', JSON.stringify(records.map(_recToStore)));
+        } catch(e) {}
+      } else {
+        try {
+          await _recCol().doc(stored.id).set(stored);
+        } catch(e) { console.warn('[DS] upsertRecord error (offline ok):', e.code); }
+      }
+    },
+
+    async deleteRecord(id) {
+      if (_mode === 'guest') {
+        try {
+          localStorage.setItem('fdc_records', JSON.stringify(records.map(_recToStore)));
+        } catch(e) {}
+      } else {
+        try {
+          await _recCol().doc(id).delete();
+        } catch(e) { console.warn('[DS] deleteRecord error:', e.code); }
+      }
+    },
+
+    async upsertEarnings(dayKey, data) {
+      if (_mode === 'guest') {
+        try {
+          localStorage.setItem('fdc_earnings', JSON.stringify(earnings));
+        } catch(e) {}
+      } else {
+        try {
+          await _ernCol().doc(dayKey).set(data);
+        } catch(e) { console.warn('[DS] upsertEarnings error (offline ok):', e.code); }
+      }
+    },
+
+    async saveCfg(cfgObj) {
+      if (_mode === 'guest') {
+        try {
+          localStorage.setItem('fdc_cfg', JSON.stringify(cfgObj));
+        } catch(e) {}
+      } else {
+        try {
+          await _userRef().set(cfgObj, { merge: true });
+        } catch(e) { console.warn('[DS] saveCfg error:', e.code); }
+      }
+    },
+
+    // ── 移行 ────────────────────────────────────────────────────
+    hasMigrationData() {
+      return !!(localStorage.getItem('fdc_records') || localStorage.getItem('fdc_earnings'));
+    },
+
+    async migrate() {
+      // Step 1: records を 500 件ずつバッチ書き込み
+      const localRecs = JSON.parse(localStorage.getItem('fdc_records') || '[]');
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < localRecs.length; i += BATCH_SIZE) {
+        const batch = _db.batch();
+        localRecs.slice(i, i + BATCH_SIZE).forEach(function(r) {
+          const stored = _recToStore({ ...r, start: new Date(r.start), end: new Date(r.end) });
+          batch.set(_recCol().doc(stored.id), stored);
+        });
+        await batch.commit();
+      }
+      // Step 2: earnings を全件 setDoc
+      const localErn = JSON.parse(localStorage.getItem('fdc_earnings') || '{}');
+      const ernBatch = _db.batch();
+      Object.keys(localErn).forEach(function(dk) {
+        ernBatch.set(_ernCol().doc(dk), localErn[dk]);
+      });
+      await ernBatch.commit();
+      // Step 3: cfg を保存
+      const localCfg = JSON.parse(localStorage.getItem('fdc_cfg') || '{}');
+      await _userRef().set(localCfg, { merge: true });
+      // Step 4: 再読み込みして件数確認
+      const snap = await _recCol().get();
+      if (snap.size >= localRecs.length) {
+        this.clearLocalData();
+      } else {
+        throw new Error('件数不一致: local=' + localRecs.length + ', firestore=' + snap.size);
+      }
+    },
+
+    clearLocalData() {
+      ['fdc_cfg','fdc_records','fdc_earnings','fdc_active',
+       'fdc_cash','fdc_counts','fdc_sent'].forEach(function(k) {
+        localStorage.removeItem(k);
+      });
+    },
+
+    async deleteAllUserData() {
+      if (!_uid || !_db) return;
+      // records を全件削除
+      const recSnap = await _recCol().get();
+      const recBatch = _db.batch();
+      recSnap.docs.forEach(d => recBatch.delete(d.ref));
+      await recBatch.commit();
+      // earnings を全件削除
+      const ernSnap = await _ernCol().get();
+      const ernBatch = _db.batch();
+      ernSnap.docs.forEach(d => ernBatch.delete(d.ref));
+      await ernBatch.commit();
+      // cfg（uid ドキュメント自体）を削除
+      await _userRef().delete();
+    },
+
+    // 現在 Firestore にデータが存在するか
+    async hasFirestoreData() {
+      if (_mode !== 'firestore') return false;
+      const snap = await _recCol().limit(1).get();
+      return !snap.empty;
+    }
+  };
+})();
+// ===== /DataService =====
+
+function _applyConfigToUI() {
+  const wsEl = document.getElementById('week-start');
+  if (wsEl) wsEl.value = cfg.weekStart;
+  const wthEl = document.getElementById('weekly-target-hours');
+  if (wthEl) wthEl.value = cfg.weeklyTargetHours != null ? cfg.weeklyTargetHours : '';
+  const wstEl = document.getElementById('weekly-sales-target');
+  if (wstEl) wstEl.value = cfg.weeklySalesTarget != null ? cfg.weeklySalesTarget : '';
+  ['uber','demae','rocket'].forEach(function(v) {
+    const el = document.getElementById('chk-vendor-' + v);
+    if (el) el.checked = (cfg.enabledVendors || ['uber','demae','rocket']).includes(v);
+  });
+  const gasEl = document.getElementById('gas-url');
+  if (gasEl) gasEl.value = cfg.gasUrl || '';
+  renderVendorGrid();
 }
 
 function saveSettings() {
@@ -882,7 +1096,7 @@ function saveSettings() {
   }
   const gasEl = document.getElementById('gas-url');
   if (gasEl) cfg.gasUrl = gasEl.value;
-  saveLocalData();
+  DS.saveCfg(cfg);
   updateSyncBar();
   renderVendorGrid();
   render();
@@ -1337,7 +1551,7 @@ function resetSalesDay() {
 function resetSalesDayData(dayKey) {
   if (!confirm(dayKey + ' の売上・件数データをリセットしますか？\n（稼働記録は消えません）')) return;
   delete earnings[dayKey];
-  saveLocalData();
+  DS.upsertEarnings(dayKey, {}).catch(function(){});
   if (cfg.gasUrl) scheduleEarningsSave(dayKey);
   renderSalesTab();
 }
@@ -1378,7 +1592,7 @@ function setEarning(dayKey, vendor, field, value) {
     d[vendor] = v;
   }
   scheduleEarningsSave(dayKey);
-  saveLocalData();
+  DS.upsertEarnings(dayKey, earnings[dayKey] || {}).catch(function(){});
   render();
 }
 
@@ -1389,14 +1603,14 @@ function getDayCash(dayKey) {
 function addCashEntry(dayKey, vendor, amount) {
   getDayCash(dayKey).push({ ts: Date.now(), vendor, amount: Math.max(0, Math.round(safeNum(amount))) });
   scheduleEarningsSave(dayKey);
-  saveLocalData();
+  DS.upsertEarnings(dayKey, earnings[dayKey] || {}).catch(function(){});
 }
 
 function removeCashEntry(dayKey, idx) {
   const list = getDayCash(dayKey);
   if (idx >= 0 && idx < list.length) list.splice(idx, 1);
   scheduleEarningsSave(dayKey);
-  saveLocalData();
+  DS.upsertEarnings(dayKey, earnings[dayKey] || {}).catch(function(){});
 }
 
 function getDayCashTotal(dayKey, vendor) {
@@ -1415,7 +1629,7 @@ function getDaySentAt(dayKey) {
 
 function setDaySentAt(dayKey, value) {
   ensureDayEarnings(dayKey).sentAt = value || false;
-  saveLocalData();
+  DS.upsertEarnings(dayKey, earnings[dayKey] || {}).catch(function(){});
 }
 
 function toggleDayGroup(dayKey) {
@@ -1755,7 +1969,7 @@ async function syncFromGAS() {
         });
       }
 
-      saveLocalData();
+      DS.saveCfg(cfg);
     }
     syncStatus = 'ok'; updateSyncBar(); render();
   } catch(e) {
@@ -1918,7 +2132,7 @@ async function saveRecord() {
       shouldSync = true;
     }
   }
-  saveLocalData();
+  DS.upsertRecord(records[editIdx !== null ? editIdx : records.length - 1]).catch(function(){});
   closeModal();
   render();
   if (shouldSync && syncPayload) {
@@ -1948,7 +2162,7 @@ function startDel(v) {
   }
   if (active) return;
   active = v; activeStart = new Date();
-  saveLocalData(); render();
+  render();
 }
 
 async function completeDel() {
@@ -1991,7 +2205,8 @@ async function completeDel() {
       if (el) el.className = 'vbtn';
     });
     active = null; activeStart = null;
-    saveLocalData(); render();
+    DS.upsertRecord(rec).catch(function(){});
+    render();
   } finally {
     completing = false;
   }
@@ -2005,7 +2220,8 @@ async function deleteRecord(idx) {
     setTimeout(syncFromGAS, 1500);
   }
   records.splice(idx, 1);
-  saveLocalData(); render();
+  DS.deleteRecord(rec.id || rec.clientId).catch(function(){});
+  render();
 }
 
 
@@ -2135,7 +2351,7 @@ function renderSalesTab() {
           <input type="number" min="0" value="${dayCounts[v]||0}"
             style="width:60px;text-align:right;padding:5px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
             onfocus="this.select()"
-            oninput="getDayCounts('${dayKey}')['${v}']=parseInt(this.value)||0;scheduleEarningsSave('${dayKey}');saveLocalData();">
+            oninput="getDayCounts('${dayKey}')['${v}']=parseInt(this.value)||0;scheduleEarningsSave('${dayKey}');DS.upsertEarnings('${dayKey}', earnings['${dayKey}']||{}).catch(function(){});">
         </div>`).join('')}
     </div>`;
   }
@@ -2256,10 +2472,20 @@ function render() {
 }
 
 
-loadData();
+DS.init(null).then(function() {
+  render();
+});
 updateSyncBar();
 if(cfg.gasUrl) syncFromGAS();
-setInterval(()=>{saveLocalData();render();},1000);
+setInterval(function() {
+  // fdc_active（タイマー中断回復用）のみ毎秒保存
+  if (active) {
+    try {
+      localStorage.setItem('fdc_active', JSON.stringify({ vendor: active, start: activeStart.toISOString() }));
+    } catch(e) {}
+  }
+  render();
+}, 1000);
 render();
 
 // ===== earnings 自動保存 =====
@@ -2408,6 +2634,59 @@ function showToast(msg) {
   t.style.opacity = '1';
   clearTimeout(t._timer);
   t._timer = setTimeout(function() { t.style.opacity = '0'; }, 3000);
+}
+
+async function showMigrationBannerIfNeeded() {
+  if (!DS.hasMigrationData()) return;
+  if (sessionStorage.getItem('migrationDismissed')) return;
+
+  const banner = document.getElementById('migration-banner');
+  const msg    = document.getElementById('migration-banner-msg');
+  const btnOk  = document.getElementById('migration-btn-ok');
+  const btnDel = document.getElementById('migration-btn-delete');
+  const btnLater = document.getElementById('migration-btn-later');
+  if (!banner) return;
+
+  const hasCloud = await DS.hasFirestoreData();
+  if (hasCloud) {
+    msg.textContent = 'クラウドにも既存データがあります。ゲストデータをアカウントに追加しますか？（同じ日のデータは上書きされます）';
+    btnOk.textContent = '追加する';
+  } else {
+    msg.textContent = 'ゲストとして記録したデータがあります。アカウントに引き継ぎますか？';
+    btnOk.textContent = '引き継ぐ';
+  }
+
+  banner.style.display = 'block';
+
+  btnOk.onclick = async function() {
+    btnOk.disabled = true;
+    btnOk.textContent = '移行中...';
+    try {
+      await DS.migrate();
+      // migrate 内で clearLocalData 済み
+      records  = await DS.loadRecords();
+      earnings = await DS.loadEarnings();
+      banner.style.display = 'none';
+      showToast('データを引き継ぎました');
+      render();
+    } catch(e) {
+      btnOk.disabled = false;
+      btnOk.textContent = hasCloud ? '追加する' : '引き継ぐ';
+      showToast('移行に失敗しました。もう一度お試しください: ' + e.message);
+    }
+  };
+
+  btnDel.onclick = function() {
+    if (!confirm('ゲストデータを削除します。元に戻せません。よろしいですか？')) return;
+    DS.clearLocalData();
+    banner.style.display = 'none';
+    showToast('ゲストデータを削除しました');
+  };
+
+  btnLater.onclick = function() {
+    sessionStorage.setItem('migrationDismissed', '1');
+    banner.style.display = 'none';
+  };
 }
 // ===== /Firebase Auth =====
 </script>
