@@ -171,7 +171,7 @@
     .done-btn { background: #22c55e; color: white; border: none; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 800; cursor: pointer; }
     .done-btn:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
     .sec-label { font-size: 13px; color: #111827; margin: 14px 2px 9px; font-weight: 800; }
-    .vendors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 8px 0 26px; }
+    .vendors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0 26px; }
     .vbtn {
       border: 1px solid #e5e9ed; border-radius: 999px; aspect-ratio: 1 / 1;
       padding: 13px 4px; text-align: center; cursor: pointer; background: #fff;
@@ -184,12 +184,14 @@
     .vbtn.active-uber { border: 2px solid var(--green); }
     .vbtn.active-demae { border: 2px solid var(--red); }
     .vbtn.active-rocket { border: 2px solid var(--blue); }
+    .vbtn.active-menu   { border: 2px solid #f97316; }
     .vicon { font-size: 28px; margin-bottom: 6px; line-height:1; }
     #vbtn-uber .vicon{filter:hue-rotate(70deg) saturate(1.4);}
     .vname { font-size: 12px; font-weight: 800; color: #111827; }
     .vtime { font-size: 12px; color: var(--green); margin-top: 6px; font-weight:700; }
     #vbtn-demae .vtime{color:var(--red);}
     #vbtn-rocket .vtime{color:var(--blue);}
+    #vbtn-menu .vtime{color:#f97316;}
     .hitem { display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid #f0f0f0; }
     .hitem:last-child { border-bottom: none; }
     .hdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -497,6 +499,9 @@
           <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
             <input type="checkbox" id="chk-vendor-rocket" onchange="saveSettings()" checked> ロケットナウ
           </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="chk-vendor-menu" onchange="saveSettings()" checked> menu
+          </label>
         </div>
       </div>
 
@@ -781,16 +786,17 @@
 const V = {
   uber:   { name: 'Uber Eats',    color: '#16a34a' },
   demae:  { name: '出前館',       color: '#ff2b35' },
-  rocket: { name: 'ロケットナウ', color: '#1f6fea' }
+  rocket: { name: 'ロケットナウ', color: '#1f6fea' },
+  menu:   { name: 'menu',         color: '#f97316' }
 };
 const DAYS = ['日','月','火','水','木','金','土'];
-const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ': 'rocket' };
+const V_NAMES = { 'Uber Eats': 'uber', '出前館': 'demae', 'ロケットナウ': 'rocket', 'menu': 'menu' };
 const DAY_CUTOFF_HOUR = 4; // 4:00〜翌3:59 を「同じ日」として集計（Uber締め）
 let cfg = {
   weekStart: 1,
   weeklyTargetHours: null,
   weeklySalesTarget: null,
-  enabledVendors: ['uber','demae','rocket'],
+  enabledVendors: ['uber','demae','rocket','menu'],
   gasUrl: '',
   devMode: false
 };
@@ -870,7 +876,7 @@ window.DS = (function() {
         const saved = c ? JSON.parse(c) : {};
         const base = {
           weekStart: 1, weeklyTargetHours: null, weeklySalesTarget: null,
-          enabledVendors: ['uber','demae','rocket'], gasUrl: '', devMode: false
+          enabledVendors: ['uber','demae','rocket','menu'], gasUrl: '', devMode: false
         };
         const merged = Object.assign(base, saved);
         // 移行処理
@@ -879,7 +885,7 @@ window.DS = (function() {
           delete merged.weekMax;
         }
         if (merged.gasUrl && merged.gasUrl.includes('AKfycbwfK9kRpmAC6w0FaWc1WOAGtZkwn')) merged.gasUrl = '';
-        if (!Array.isArray(merged.enabledVendors)) merged.enabledVendors = ['uber','demae','rocket'];
+        if (!Array.isArray(merged.enabledVendors)) merged.enabledVendors = ['uber','demae','rocket','menu'];
         return merged;
       } else {
         const snap = await _userRef().get();
@@ -889,7 +895,7 @@ window.DS = (function() {
           weekStart:          data.weekStart          ?? 1,
           weeklyTargetHours:  data.weeklyTargetHours  ?? null,
           weeklySalesTarget:  data.weeklySalesTarget  ?? null,
-          enabledVendors:     data.enabledVendors     ?? ['uber','demae','rocket'],
+          enabledVendors:     data.enabledVendors     ?? ['uber','demae','rocket','menu'],
           gasUrl:             data.gasUrl             ?? '',
           devMode:            data.devMode            ?? false
         };
@@ -1068,9 +1074,9 @@ function _applyConfigToUI() {
   if (wthEl) wthEl.value = cfg.weeklyTargetHours != null ? cfg.weeklyTargetHours : '';
   const wstEl = document.getElementById('weekly-sales-target');
   if (wstEl) wstEl.value = cfg.weeklySalesTarget != null ? cfg.weeklySalesTarget : '';
-  ['uber','demae','rocket'].forEach(function(v) {
+  ['uber','demae','rocket','menu'].forEach(function(v) {
     const el = document.getElementById('chk-vendor-' + v);
-    if (el) el.checked = (cfg.enabledVendors || ['uber','demae','rocket']).includes(v);
+    if (el) el.checked = (cfg.enabledVendors || ['uber','demae','rocket','menu']).includes(v);
   });
   const gasEl = document.getElementById('gas-url');
   if (gasEl) gasEl.value = cfg.gasUrl || '';
@@ -1083,7 +1089,7 @@ function saveSettings() {
   cfg.weeklyTargetHours = wthEl && wthEl.value !== '' ? (parseInt(wthEl.value) || null) : null;
   const wstEl = document.getElementById('weekly-sales-target');
   cfg.weeklySalesTarget = wstEl && wstEl.value !== '' ? (parseInt(wstEl.value) || null) : null;
-  cfg.enabledVendors = ['uber','demae','rocket'].filter(v => {
+  cfg.enabledVendors = ['uber','demae','rocket','menu'].filter(v => {
     const el = document.getElementById('chk-vendor-' + v);
     return el ? el.checked : true;
   });
@@ -1106,7 +1112,7 @@ function getEnabledVendors() {
   return Object.keys(V).filter(v => (cfg.enabledVendors || ['uber','demae','rocket']).includes(v));
 }
 
-const VENDOR_ICONS = { uber: '🚴', demae: '🛵', rocket: '🚀' };
+const VENDOR_ICONS = { uber: '🚴', demae: '🛵', rocket: '🚀', menu: '🍔' };
 
 function renderVendorGrid() {
   const grid = document.getElementById('vendor-grid');
@@ -1222,7 +1228,7 @@ function renderHistoryWeekly() {
     const {start:ws} = getWeekRange(dt);
     const wk = toDateInput(ws);
     if (!weeks[wk]) return;
-    weeks[wk].sales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+    weeks[wk].sales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);
     Object.values(e.counts||{}).forEach(c=>{weeks[wk].count+=(c||0);});
   });
   const content = document.getElementById('history-weekly-content');
@@ -1254,7 +1260,7 @@ function renderHistoryMonthly() {
   Object.entries(earnings).forEach(([dk,e]) => {
     const mk=dk.slice(0,7);
     if (!months[mk]) return;
-    months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+    months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);
     Object.values(e.counts||{}).forEach(c=>{months[mk].count+=(c||0);});
   });
   const content = document.getElementById('history-monthly-content');
@@ -1312,7 +1318,7 @@ function renderAnalysis() {
 function renderAnalysisMonthly() {
   const months={};
   records.forEach(r=>{const mk=businessDayKey(r.start).slice(0,7);if(!months[mk])months[mk]={sec:0,sales:0,count:0,days:new Set()};months[mk].sec+=r.duration;months[mk].days.add(businessDayKey(r.start));});
-  Object.entries(earnings).forEach(([dk,e])=>{const mk=dk.slice(0,7);if(!months[mk])return;months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));Object.values(e.counts||{}).forEach(c=>{months[mk].count+=(c||0);});});
+  Object.entries(earnings).forEach(([dk,e])=>{const mk=dk.slice(0,7);if(!months[mk])return;months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);Object.values(e.counts||{}).forEach(c=>{months[mk].count+=(c||0);});});
   const content=document.getElementById('analysis-monthly-content');
   if(!content) return;
   const keys=Object.keys(months).sort().reverse();
@@ -1344,6 +1350,7 @@ function renderAnalysisVendor() {
     if(stats.uber){stats.uber.sales+=(e.uber||0);stats.uber.count+=(e.counts?.uber||0);}
     if(stats.demae){stats.demae.sales+=(e.demae||0);stats.demae.count+=(e.counts?.demae||0);}
     if(stats.rocket){stats.rocket.sales+=((e.rocket?.delivery||0)+(e.rocket?.quest||0));stats.rocket.count+=(e.counts?.rocket||0);}
+    if(stats.menu){stats.menu.sales+=(e.menu||0);stats.menu.count+=(e.counts?.menu||0);}
   });
   const content=document.getElementById('analysis-vendor-content');
   if(!content) return;
@@ -1372,7 +1379,7 @@ function renderAnalysisWeekday() {
   records.forEach(r=>{const dk=businessDayKey(r.start);const wd=new Date(dk+'T00:00:00').getDay();wdStats[wd].sec+=r.duration;wdStats[wd].days.add(dk);});
   Object.entries(earnings).forEach(([dk,e])=>{
     const wd=new Date(dk+'T00:00:00').getDay();
-    const total=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+    const total=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);
     const cnt=Object.values(e.counts||{}).reduce((s,c)=>s+(c||0),0);
     if(total>0||cnt>0){wdStats[wd].sales+=total;wdStats[wd].count+=cnt;}
   });
@@ -1414,7 +1421,7 @@ function exportCSV(type) {
     weekRecs.forEach(r=>{const dk=businessDayKey(r.start);if(!byDay[dk])byDay[dk]={sec:0,sales:0,count:0};byDay[dk].sec+=r.duration;});
     Object.entries(earnings).forEach(([dk,e])=>{
       if(!byDay[dk])return;
-      byDay[dk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+      byDay[dk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);
       Object.values(e.counts||{}).forEach(c=>{byDay[dk].count+=(c||0);});
     });
     const header='日付,稼働時間(h),件数,売上(円),時給(円/h)';
@@ -1427,7 +1434,7 @@ function exportCSV(type) {
   } else if (type === 'weekly') {
     const weeks={};
     records.forEach(r=>{const{start:ws}=getWeekRange(r.start);const wk=toDateInput(ws);if(!weeks[wk])weeks[wk]={start:ws,sec:0,sales:0,count:0,days:new Set()};weeks[wk].sec+=r.duration;weeks[wk].days.add(businessDayKey(r.start));});
-    Object.entries(earnings).forEach(([dk,e])=>{const dt=new Date(dk+'T'+String(DAY_CUTOFF_HOUR).padStart(2,'0')+':00:00');const{start:ws}=getWeekRange(dt);const wk=toDateInput(ws);if(!weeks[wk])return;weeks[wk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));Object.values(e.counts||{}).forEach(c=>{weeks[wk].count+=(c||0);});});
+    Object.entries(earnings).forEach(([dk,e])=>{const dt=new Date(dk+'T'+String(DAY_CUTOFF_HOUR).padStart(2,'0')+':00:00');const{start:ws}=getWeekRange(dt);const wk=toDateInput(ws);if(!weeks[wk])return;weeks[wk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);Object.values(e.counts||{}).forEach(c=>{weeks[wk].count+=(c||0);});});
     const header='週開始日,稼働時間(h),稼働日数,件数,売上(円),時給(円/h)';
     const rows=Object.entries(weeks).sort().map(([wk,w])=>{const h=w.sec/3600;const hourly=w.sec>0?Math.round(w.sales/h):0;return[wk,h.toFixed(2),w.days.size,w.count,w.sales,hourly].join(',');});
     downloadCSV('derilog_週別.csv',[header,...rows].join('\n'));
@@ -1435,7 +1442,7 @@ function exportCSV(type) {
   } else if (type === 'monthly') {
     const months={};
     records.forEach(r=>{const mk=businessDayKey(r.start).slice(0,7);if(!months[mk])months[mk]={sec:0,sales:0,count:0,days:new Set()};months[mk].sec+=r.duration;months[mk].days.add(businessDayKey(r.start));});
-    Object.entries(earnings).forEach(([dk,e])=>{const mk=dk.slice(0,7);if(!months[mk])return;months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));Object.values(e.counts||{}).forEach(c=>{months[mk].count+=(c||0);});});
+    Object.entries(earnings).forEach(([dk,e])=>{const mk=dk.slice(0,7);if(!months[mk])return;months[mk].sales+=(e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);Object.values(e.counts||{}).forEach(c=>{months[mk].count+=(c||0);});});
     const header='年月,稼働時間(h),稼働日数,件数,売上(円),時給(円/h)';
     const rows=Object.entries(months).sort().map(([mk,m])=>{const h=m.sec/3600;const hourly=m.sec>0?Math.round(m.sales/h):0;return[mk,h.toFixed(2),m.days.size,m.count,m.sales,hourly].join(',');});
     downloadCSV('derilog_月別.csv',[header,...rows].join('\n'));
@@ -1472,7 +1479,7 @@ function updateDetailPanel() {
   const monthDays = new Set();
   Object.entries(earnings).forEach(([dk, e]) => {
     if (!dk.startsWith(monthKey)) return;
-    monthSales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+    monthSales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);
     monthDays.add(dk);
   });
   let monthWorkSec = 0;
@@ -1519,7 +1526,7 @@ function updateDetailPanel() {
       let weekSales = 0;
       Object.entries(earnings).forEach(([dk, e]) => {
         const dt = new Date(dk+'T'+String(DAY_CUTOFF_HOUR).padStart(2,'0')+':00:00');
-        if (dt >= ws) weekSales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0));
+        if (dt >= ws) weekSales += (e.uber||0)+(e.demae||0)+((e.rocket?.delivery||0)+(e.rocket?.quest||0))+(e.menu||0);
       });
       const pct = Math.min(100, Math.round(weekSales/cfg.weeklySalesTarget*100));
       const bar = document.getElementById('detail-sales-bar');
@@ -1575,11 +1582,13 @@ function ensureDayEarnings(dayKey) {
   if (!earnings[dayKey].rocket || typeof earnings[dayKey].rocket !== 'object') earnings[dayKey].rocket = {};
   if (typeof earnings[dayKey].rocket.delivery !== 'number') earnings[dayKey].rocket.delivery = 0;
   if (typeof earnings[dayKey].rocket.quest !== 'number') earnings[dayKey].rocket.quest = 0;
+  if (typeof earnings[dayKey].menu !== 'number') earnings[dayKey].menu = 0;
   if (!Array.isArray(earnings[dayKey].cashLog)) earnings[dayKey].cashLog = [];
-  if (!earnings[dayKey].counts || typeof earnings[dayKey].counts !== 'object') earnings[dayKey].counts = { uber: 0, demae: 0, rocket: 0 };
+  if (!earnings[dayKey].counts || typeof earnings[dayKey].counts !== 'object') earnings[dayKey].counts = { uber: 0, demae: 0, rocket: 0, menu: 0 };
   if (typeof earnings[dayKey].counts.uber !== 'number') earnings[dayKey].counts.uber = 0;
   if (typeof earnings[dayKey].counts.demae !== 'number') earnings[dayKey].counts.demae = 0;
   if (typeof earnings[dayKey].counts.rocket !== 'number') earnings[dayKey].counts.rocket = 0;
+  if (typeof earnings[dayKey].counts.menu !== 'number') earnings[dayKey].counts.menu = 0;
   if (typeof earnings[dayKey].sentAt === 'undefined') earnings[dayKey].sentAt = false;
   return earnings[dayKey];
 }
@@ -2332,6 +2341,17 @@ function renderSalesTab() {
             oninput="setEarning('${dayKey}','rocket','quest',this.value)">
           <span style="color:#888;font-size:10px;">クエ</span>
         </div>
+      </div>`;
+    if (enabled.includes('menu')) rows += `
+      <div class="week-vendor-row" style="gap:10px;align-items:center;margin-top:6px;">
+        <span style="display:flex;align-items:center;gap:6px;min-width:110px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${V.menu.color};display:inline-block;"></span>menu
+        </span>
+        <input type="text" inputmode="numeric" pattern="[0-9]*"
+          style="width:120px;text-align:right;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"
+          value="${moneyInputValue(dEarn.menu)}" onfocus="this.select()"
+          oninput="setEarning('${dayKey}','menu',null,this.value)">
+        <span style="color:#888;font-size:11px;">円</span>
       </div>`;
     earningsArea.innerHTML = `<div style="background:#fff;border:1px solid #edf0f3;border-radius:12px;padding:12px;">${rows}</div>`;
   }
