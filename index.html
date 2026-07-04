@@ -1158,6 +1158,7 @@ function toggleDevMode() {
 
 function switchTab(tab) {
   currentTab = tab;
+  try { localStorage.setItem('fdc_tab', tab); } catch(e) {}
   const tabs = ['active','sales','history','analysis'];
   tabs.forEach(t => {
     const btn = document.getElementById('btab-' + t);
@@ -2506,7 +2507,8 @@ function render() {
 
 
 DS.init(null).then(function() {
-  render();
+  const savedTab = localStorage.getItem('fdc_tab');
+  if (savedTab) switchTab(savedTab); else render();
 });
 updateSyncBar();
 if(cfg.gasUrl) syncFromGAS();
@@ -2573,13 +2575,15 @@ window.DS = window.DS || {
     if (user) {
       // Firestore モードで DataService を再初期化してデータ読み直し
       DS.init(user).then(function() {
-        render();
+        const savedTab = localStorage.getItem('fdc_tab');
+        if (savedTab) switchTab(savedTab); else render();
         showMigrationBannerIfNeeded();
       });
     } else {
       // guest モードで DataService を再初期化
       DS.init(null).then(function() {
-        render();
+        const savedTab = localStorage.getItem('fdc_tab');
+        if (savedTab) switchTab(savedTab); else render();
       });
     }
   });
