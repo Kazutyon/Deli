@@ -2229,6 +2229,7 @@ async function completeDel() {
     });
     active = null; activeStart = null;
     DS.upsertRecord(rec).catch(function(){});
+    if (cfg.gasUrl) scheduleEarningsSave(businessDayKey(rec.start));
     render();
   } finally {
     completing = false;
@@ -2533,9 +2534,16 @@ async function saveEarningsToGAS(dayKey) {
   if (!cfg.gasUrl) return;
   try {
     const d = ensureDayEarnings(dayKey);
+    const uberSec   = getVendorWorkSeconds(dayKey, 'uber');
+    const demaeSec  = getVendorWorkSeconds(dayKey, 'demae');
+    const rocketSec = getVendorWorkSeconds(dayKey, 'rocket');
     await postToGAS({
       action: 'saveEarnings',
       date: dayKey,
+      workSeconds: uberSec + demaeSec + rocketSec,
+      uberWorkSeconds: uberSec,
+      demaeWorkSeconds: demaeSec,
+      rocketWorkSeconds: rocketSec,
       uber:   { sales: d.uber  || 0, cash: getDayCashTotal(dayKey, 'uber'),  count: (d.counts && d.counts.uber)   || 0 },
       demae:  { sales: d.demae || 0, cash: getDayCashTotal(dayKey, 'demae'), count: (d.counts && d.counts.demae)  || 0 },
       rocket: { delivery: (d.rocket && d.rocket.delivery) || 0,
