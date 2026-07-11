@@ -1484,8 +1484,7 @@ function updateDetailPanel() {
   const now = new Date();
   const todayKey = businessDayKey(now);
   const dEarn = ensureDayEarnings(todayKey);
-  const todayCash = getDayCash(todayKey).reduce((s,e) => s + e.amount, 0);
-  const todaySalesTotal = (dEarn.uber||0)+(dEarn.demae||0)+((dEarn.rocket?.delivery||0)+(dEarn.rocket?.quest||0))+todayCash;
+  const todaySalesTotal = (dEarn.uber||0)+(dEarn.demae||0)+((dEarn.rocket?.delivery||0)+(dEarn.rocket?.quest||0));
 
   // 今月売上
   const monthKey = todayKey.slice(0,7);
@@ -2447,9 +2446,8 @@ function render() {
 
   // 今日の売上合計・時給・サマリー
   const dEarn = ensureDayEarnings(todayKey);
-  const todayCash = getDayCash(todayKey).reduce((s,e) => s+e.amount, 0);
   const todaySalesTotal = (dEarn.uber||0)+(dEarn.demae||0)
-    +(dEarn.rocket?.delivery||0)+(dEarn.rocket?.quest||0)+todayCash;
+    +(dEarn.rocket?.delivery||0)+(dEarn.rocket?.quest||0);
   const el_sales = document.getElementById('today-sales-val');
   const el_salesSub = document.getElementById('today-sales-sub');
   if (el_sales) el_sales.textContent = money(todaySalesTotal);
